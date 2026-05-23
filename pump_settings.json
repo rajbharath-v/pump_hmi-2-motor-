@@ -6,5 +6,7 @@
   "tube2": "2x1mm",
   "calib1": 1.0,
   "calib2": 1.0,
-  "recipes": []
+  "recipes": [],
+  "suckback1": 28.0,
+  "suckback2": 141.5
 }

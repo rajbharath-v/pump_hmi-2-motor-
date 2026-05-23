@@ -335,6 +335,10 @@ class PumpHMI(tk.Tk):
             tk.DoubleVar(value=self._settings.get("calib1", 1.0)),
             tk.DoubleVar(value=self._settings.get("calib2", 1.0)),
         ]
+        self._suckback_var = [
+            tk.DoubleVar(value=self._settings.get("suckback1", 0.0)),
+            tk.DoubleVar(value=self._settings.get("suckback2", 0.0)),
+        ]
 
         # Build UI
         self._build_fonts()
@@ -402,7 +406,7 @@ class PumpHMI(tk.Tk):
         self._build_tab_dispensing()
         self._build_tab_timing()
         self._build_tab_calibration()
-        self._build_tab_recipes()
+        self._build_tab_common_mode()
         self._build_tab_settings()
 
     # ------------------------------------------------------------------
@@ -723,6 +727,57 @@ class PumpHMI(tk.Tk):
         self._input_box(grid, "Repeat:",     self._dv_rep[idx],  "",   row=3, col=0)
         self._input_box(grid, "Speed:",      self._dv_speed[idx],"RPM",row=4, col=0)
 
+        # RPM Slider for dispensing
+        sep_sl = tk.Frame(parent, bg=C["border"], height=1)
+        sep_sl.pack(fill="x", pady=4)
+        tk.Label(parent, text="Speed Control:", font=self.f_label,
+                 bg=C["panel"], fg=C["text_dim"]).pack(anchor="w")
+
+        sl_row = tk.Frame(parent, bg=C["panel"])
+        sl_row.pack(fill="x", pady=2)
+        sl = tk.Scale(sl_row, from_=0.1, to=350, orient="horizontal",
+                      variable=self._dv_speed[idx], resolution=0.1,
+                      bg=C["panel"], fg=C["text"],
+                      troughcolor=C["bg"], highlightthickness=0,
+                      length=200,
+                      command=lambda v, i=idx: self._on_disp_speed_change(i))
+        sl.pack(side="left", fill="x", expand=True)
+
+        spd_box = tk.Frame(sl_row, bg=C["input_bg"], padx=6, pady=3)
+        spd_box.pack(side="left", padx=4)
+        tk.Label(spd_box, textvariable=self._dv_speed[idx],
+                 font=("Consolas", 11, "bold"),
+                 bg=C["input_bg"], fg="white", width=6).pack(side="left")
+        tk.Label(spd_box, text=" RPM", font=self.f_small,
+                 bg=C["input_bg"], fg="#90CAF9").pack(side="left")
+
+        # Speed presets for dispensing
+        pr_row = tk.Frame(parent, bg=C["panel"])
+        pr_row.pack(fill="x", pady=2)
+        for v in [10, 30, 60, 100, 150, 200, 300]:
+            tk.Button(pr_row, text=str(v),
+                      command=lambda val=v, i=idx: self._set_disp_speed(i, float(val)),
+                      font=("Segoe UI", 9, "bold"),
+                      bg=C["accent2"], fg="white",
+                      relief="flat", padx=6, pady=3,
+                      cursor="hand2").pack(side="left", padx=1)
+
+        # Calculated run time info
+        calc_fr = tk.Frame(parent, bg=C["row_alt"], padx=8, pady=6)
+        calc_fr.pack(fill="x", pady=4)
+        self._calc_time_lbl = getattr(self, "_calc_time_lbl", [None, None])
+        self._calc_time_lbl[idx] = tk.Label(calc_fr,
+                                             text="Set volume and speed to see run time",
+                                             font=self.f_small,
+                                             bg=C["row_alt"], fg=C["text_dim"])
+        self._calc_time_lbl[idx].pack()
+
+        # Bind vol/speed changes to update calculated time
+        self._dv_vol[idx].trace_add("write",
+            lambda *a, i=idx: self._update_calc_time(i))
+        self._dv_speed[idx].trace_add("write",
+            lambda *a, i=idx: self._update_calc_time(i))
+
         sep2 = tk.Frame(parent, bg=C["border"], height=1)
         sep2.pack(fill="x", pady=6)
 
@@ -984,20 +1039,20 @@ class PumpHMI(tk.Tk):
     # ------------------------------------------------------------------
     # TAB 5 — RECIPES (Common Mode)
     # ------------------------------------------------------------------
-    def _build_tab_recipes(self):
-        tab = self._tab_frame("Recipes")
+    def _build_tab_common_mode(self):
+        tab = self._tab_frame("Common Mode")
         outer, body = self._card(tab, "COMMON MODE  —  Recipe Programs")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
         # Treeview
-        cols = ("no", "channel", "tube", "vol", "time", "pause", "repeat", "speed")
+        cols = ("no","channel","tube","vol","time","pause","repeat","speed","suckback")
         self._recipe_tree = ttk.Treeview(body, columns=cols, show="headings", height=12)
 
-        headers = {"no": "#", "channel": "Channel", "tube": "Tube",
-                   "vol": "Vol (mL)", "time": "Time (s)", "pause": "Pause (s)",
-                   "repeat": "Repeat", "speed": "Speed (RPM)"}
-        widths = {"no": 40, "channel": 70, "tube": 80, "vol": 80,
-                  "time": 80, "pause": 80, "repeat": 70, "speed": 90}
+        headers = {"no":"#","channel":"Channel","tube":"Tube",
+                   "vol":"Vol(mL)","time":"Time(s)","pause":"Pause(s)",
+                   "repeat":"Repeat","speed":"RPM","suckback":"Suck-Back"}
+        widths  = {"no":35,"channel":75,"tube":75,"vol":75,
+                   "time":70,"pause":70,"repeat":60,"speed":70,"suckback":80}
         for col in cols:
             self._recipe_tree.heading(col, text=headers[col])
             self._recipe_tree.column(col, width=widths[col], anchor="center")
@@ -1024,47 +1079,124 @@ class PumpHMI(tk.Tk):
         for i, r in enumerate(self._recipes):
             tag = "evenrow" if i % 2 == 0 else ""
             self._recipe_tree.insert("", "end", values=(
-                i+1, f"Ch {r['channel']}",
-                r["tube"], f"{r['vol']:.2f}",
-                f"{r['time']:.2f}", f"{r['pause']:.2f}",
-                r["repeat"], f"{r['speed']:.1f}"
+                i+1,
+                f"Pump {r['channel']}",
+                r.get("tube","2x1mm"),
+                f"{r['vol']:.2f}",
+                f"{r['time']:.2f}",
+                f"{r['pause']:.2f}",
+                r.get("repeat",1),
+                f"{r['speed']:.1f}",
+                f"{r.get('suckback',0.0):.1f} deg",
             ), tags=(tag,))
 
     def _add_recipe(self):
-        # Simple dialog
         dlg = tk.Toplevel(self)
-        dlg.title("Add Recipe")
-        dlg.geometry("340x320")
+        dlg.title("Add Program — Common Mode")
+        dlg.geometry("420x480")
         dlg.configure(bg=C["panel"])
+        dlg.resizable(False, False)
         dlg.grab_set()
 
-        fields = {}
-        defaults = {"channel": 1, "tube": "2x1mm", "vol": 10.0,
-                    "time": 2.0, "pause": 1.0, "repeat": 1, "speed": 60.0}
-        labels  = {"channel": "Channel (1/2)", "tube": "Tube Size",
-                   "vol": "Volume (mL)", "time": "Disp. Time (s)",
-                   "pause": "Pause Time (s)", "repeat": "Repeat",
-                   "speed": "Speed (RPM)"}
+        # Title
+        hdr = tk.Frame(dlg, bg=C["accent"], pady=8)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="  ADD PROGRAM", font=self.f_bold,
+                 bg=C["accent"], fg="white").pack(side="left", padx=10)
 
-        for i, (k, v) in enumerate(defaults.items()):
-            tk.Label(dlg, text=labels[k], font=self.f_label,
-                     bg=C["panel"], fg=C["text_dim"]).grid(row=i, column=0, padx=12, pady=4, sticky="w")
-            var = tk.StringVar(value=str(v))
+        body = tk.Frame(dlg, bg=C["panel"], padx=16, pady=10)
+        body.pack(fill="both", expand=True)
+
+        # Channel selection — big buttons
+        tk.Label(body, text="Select Channel:", font=self.f_bold,
+                 bg=C["panel"], fg=C["text"]).grid(row=0, column=0,
+                 columnspan=4, sticky="w", pady=(0,6))
+
+        ch_var = tk.IntVar(value=1)
+        for ch, col in [(1, 1), (2, 3)]:
+            rb = tk.Radiobutton(body, text=f"  PUMP {ch}  ",
+                                variable=ch_var, value=ch,
+                                font=("Segoe UI", 12, "bold"),
+                                bg=C["accent"], fg="white",
+                                selectcolor=C["green"],
+                                activebackground=C["accent"],
+                                relief="flat", padx=16, pady=8,
+                                indicatoron=False)
+            rb.grid(row=0, column=col, padx=6, pady=4)
+
+        sep = tk.Frame(body, bg=C["border"], height=1)
+        sep.grid(row=1, column=0, columnspan=4, sticky="ew", pady=8)
+
+        # Fields
+        fields = {}
+        rows = [
+            ("tube",   "Tube Size:",      "2x1mm"),
+            ("vol",    "Disp. Vol. (mL):","10.0"),
+            ("time",   "Disp. Time (s):", "2.0"),
+            ("pause",  "Pause Time (s):", "1.0"),
+            ("repeat", "Repeat:",         "1"),
+            ("speed",  "Speed (RPM):",    "60.0"),
+            ("suckback","Suck-Back (deg):","0.0"),
+        ]
+
+        for i, (k, lbl, default) in enumerate(rows):
+            tk.Label(body, text=lbl, font=self.f_label,
+                     bg=C["panel"], fg=C["text_dim"],
+                     width=18, anchor="w").grid(
+                         row=i+2, column=0, columnspan=2,
+                         sticky="w", pady=4, padx=(0,8))
+            var = tk.StringVar(value=default)
             fields[k] = var
-            tk.Entry(dlg, textvariable=var, font=self.f_mono,
-                     bg=C["input_bg"], fg="white",
-                     insertbackground="white", width=12).grid(row=i, column=1, padx=12, pady=4)
+
+            if k == "tube":
+                cb = ttk.Combobox(body, textvariable=var,
+                                  values=list(TUBE_DATA.keys()),
+                                  width=14, state="readonly")
+                cb.grid(row=i+2, column=2, columnspan=2,
+                        sticky="w", pady=4)
+            else:
+                ebox = tk.Frame(body, bg=C["input_bg"], padx=4, pady=3)
+                ebox.grid(row=i+2, column=2, columnspan=2,
+                          sticky="w", pady=4)
+                tk.Entry(ebox, textvariable=var,
+                         font=("Consolas", 12, "bold"),
+                         bg=C["input_bg"], fg="white",
+                         insertbackground="white", bd=0,
+                         width=12).pack()
+
+        # Calc info
+        info_lbl = tk.Label(body, text="", font=self.f_small,
+                            bg=C["row_alt"], fg=C["accent"],
+                            wraplength=360, justify="left", pady=4)
+        info_lbl.grid(row=len(rows)+2, column=0, columnspan=4,
+                      sticky="ew", pady=4)
+
+        def update_calc(*a):
+            try:
+                vol   = float(fields["vol"].get())
+                speed = float(fields["speed"].get())
+                tube  = fields["tube"].get()
+                t     = calc_run_time(tube, speed, vol)
+                flow  = calc_flow_rate(tube, speed)
+                info_lbl.config(
+                    text=f"Flow: {flow:.3f} mL/min  |  Run time: {t:.2f} s  |  Tube: {tube}",
+                    bg=C["row_alt"])
+            except: pass
+
+        for k in ["vol", "speed"]:
+            fields[k].trace_add("write", update_calc)
 
         def save():
             try:
                 rec = {
-                    "channel": int(fields["channel"].get()),
-                    "tube":    fields["tube"].get(),
-                    "vol":     float(fields["vol"].get()),
-                    "time":    float(fields["time"].get()),
-                    "pause":   float(fields["pause"].get()),
-                    "repeat":  int(fields["repeat"].get()),
-                    "speed":   float(fields["speed"].get()),
+                    "channel":  ch_var.get(),
+                    "tube":     fields["tube"].get(),
+                    "vol":      float(fields["vol"].get()),
+                    "time":     float(fields["time"].get()),
+                    "pause":    float(fields["pause"].get()),
+                    "repeat":   int(fields["repeat"].get()),
+                    "speed":    float(fields["speed"].get()),
+                    "suckback": float(fields["suckback"].get()),
                 }
                 self._recipes.append(rec)
                 self._settings["recipes"] = self._recipes
@@ -1072,10 +1204,12 @@ class PumpHMI(tk.Tk):
                 self._refresh_recipe_tree()
                 dlg.destroy()
             except ValueError as e:
-                messagebox.showerror("Invalid", str(e))
+                messagebox.showerror("Invalid Input", str(e))
 
-        self._big_btn(dlg, "SAVE", save, C["green"]).grid(
-            row=len(defaults), column=0, columnspan=2, pady=10)
+        btn_row = tk.Frame(body, bg=C["panel"])
+        btn_row.grid(row=len(rows)+3, column=0, columnspan=4, pady=10)
+        self._big_btn(btn_row, "  SAVE PROGRAM", save, C["green"]).pack(side="left", padx=8)
+        self._big_btn(btn_row, "  CANCEL", dlg.destroy, C["red"]).pack(side="left")
 
     def _del_recipe(self):
         sel = self._recipe_tree.selection()
@@ -1236,6 +1370,63 @@ class PumpHMI(tk.Tk):
         self._big_btn(body2, "  SAVE SETTINGS",
                       self._save_all_settings, C["accent"]).pack(fill="x", pady=4)
 
+        # ── Suck-Back Settings ───────────────────────────────────────
+        outer3, body3 = self._card(fr, "SUCK-BACK ANGLE (Anti-Drip)")
+        outer3.grid(row=1, column=0, columnspan=2, sticky="ew",
+                    padx=4, pady=4)
+
+        sb_info = tk.Frame(body3, bg=C["row_alt"], padx=10, pady=8)
+        sb_info.pack(fill="x", pady=(0,8))
+        tk.Label(sb_info,
+                 text=("Suck-back angle range: 0 - 360 deg\n"
+                       "When transferring viscous liquid, setting the suck-back "
+                       "angle can prevent liquid dripping when the pump stops."),
+                 font=self.f_small, bg=C["row_alt"], fg=C["orange"],
+                 wraplength=700, justify="left").pack(anchor="w")
+
+        sb_row = tk.Frame(body3, bg=C["panel"])
+        sb_row.pack(fill="x")
+
+        for i in range(2):
+            ch_fr = tk.Frame(sb_row, bg=C["panel"], padx=20)
+            ch_fr.pack(side="left", fill="x", expand=True)
+
+            tk.Label(ch_fr, text=f"Pump {i+1} Suck-Back Angle:",
+                     font=self.f_bold, bg=C["panel"],
+                     fg=C["accent"]).pack(anchor="w", pady=(0,4))
+
+            sl_fr = tk.Frame(ch_fr, bg=C["panel"])
+            sl_fr.pack(fill="x")
+
+            sl = tk.Scale(sl_fr, from_=0, to=360, orient="horizontal",
+                          variable=self._suckback_var[i], resolution=0.5,
+                          bg=C["panel"], fg=C["text"],
+                          troughcolor=C["bg"], highlightthickness=0,
+                          length=200)
+            sl.pack(side="left", fill="x", expand=True)
+
+            val_fr = tk.Frame(sl_fr, bg=C["input_bg"], padx=8, pady=4)
+            val_fr.pack(side="left", padx=6)
+            tk.Label(val_fr, textvariable=self._suckback_var[i],
+                     font=("Consolas", 13, "bold"),
+                     bg=C["input_bg"], fg="white",
+                     width=6).pack(side="left")
+            tk.Label(val_fr, text=" deg",
+                     font=self.f_small,
+                     bg=C["input_bg"], fg="#90CAF9").pack(side="left")
+
+            # Preset buttons
+            pre_fr = tk.Frame(ch_fr, bg=C["panel"])
+            pre_fr.pack(anchor="w", pady=4)
+            tk.Label(pre_fr, text="Quick:", font=self.f_small,
+                     bg=C["panel"], fg=C["text_dim"]).pack(side="left")
+            for ang in [0, 45, 90, 180, 270, 360]:
+                tk.Button(pre_fr, text=str(ang),
+                          command=lambda a=ang, idx=i: self._suckback_var[idx].set(a),
+                          font=("Segoe UI", 9), bg=C["bg"], fg=C["text"],
+                          relief="flat", padx=6, pady=2,
+                          cursor="hand2").pack(side="left", padx=1)
+
     # ------------------------------------------------------------------
     # Connection Logic
     # ------------------------------------------------------------------
@@ -1317,6 +1508,35 @@ class PumpHMI(tk.Tk):
         self.pump2 = None
         SharedModbusClient.reset()
         self._conn_lbl.config(text="● DISCONNECTED", fg="#FF8A80")
+
+    def _on_disp_speed_change(self, idx):
+        """Update calculated time when dispensing speed slider moves."""
+        self._update_calc_time(idx)
+
+    def _set_disp_speed(self, idx, rpm):
+        """Set dispensing speed from preset button."""
+        self._dv_speed[idx].set(rpm)
+        self._update_calc_time(idx)
+
+    def _update_calc_time(self, idx):
+        """Show calculated run time based on volume + speed + tube."""
+        try:
+            vol   = self._dv_vol[idx].get()
+            speed = self._dv_speed[idx].get()
+            tube  = self._tube_var[idx].get()
+            calib = self._calib_factor[idx].get()
+            if speed <= 0:
+                return
+            run_t  = calc_run_time(tube, speed, vol) * calib
+            flow   = calc_flow_rate(tube, speed)
+            msg    = (f"Volume: {vol:.2f} mL  |  "
+                      f"Speed: {speed:.1f} RPM  |  "
+                      f"Flow: {flow:.3f} mL/min  |  "
+                      f"Run time: {run_t:.2f} s")
+            if hasattr(self, "_calc_time_lbl") and self._calc_time_lbl[idx]:
+                self._calc_time_lbl[idx].config(text=msg, fg=C["accent"])
+        except Exception:
+            pass
 
     def _update_tube_labels(self):
         for i in range(2):
@@ -1459,8 +1679,15 @@ class PumpHMI(tk.Tk):
                                    f"Connect Channel {idx+1} in Settings first.")
             return
 
-        # Stop any existing dispense
+        # DOUBLE-START PROTECTION — ignore if already running
+        existing = self._stop_events.get(idx)
+        if existing and not existing.is_set():
+            # Already running — do nothing, protect the running cycle
+            return
+
+        # Stop any existing dispense cleanly
         self._stop_dispense(idx)
+        time.sleep(0.1)
 
         vol    = self._dv_vol[idx].get()
         pause  = self._dv_pause[idx].get()
@@ -1512,6 +1739,15 @@ class PumpHMI(tk.Tk):
                     time.sleep(0.1)
 
                 pump.stop()
+                # Apply suck-back after stop (reverse briefly)
+                sb_angle = self._suckback_var[idx].get()
+                if sb_angle > 0:
+                    sb_time = (sb_angle / 360.0) / (speed / 60.0)
+                    pump.set_direction(False)  # reverse
+                    pump.start()
+                    time.sleep(sb_time)
+                    pump.stop()
+                    pump.set_direction(True)   # back to forward
                 self.after(0, lambda: self._update_motor_ui(idx))
                 # Update total volume
                 self._total_vol[idx] += vol
@@ -1593,13 +1829,15 @@ class PumpHMI(tk.Tk):
 
     def _save_all_settings(self):
         self._settings.update({
-            "port":   self._port_var.get(),
-            "slave1": self._slave_var[0].get(),
-            "slave2": self._slave_var[1].get(),
-            "tube1":  self._tube_var[0].get(),
-            "tube2":  self._tube_var[1].get(),
-            "calib1": self._calib_factor[0].get(),
-            "calib2": self._calib_factor[1].get(),
+            "port":      self._port_var.get(),
+            "slave1":    self._slave_var[0].get(),
+            "slave2":    self._slave_var[1].get(),
+            "tube1":     self._tube_var[0].get(),
+            "tube2":     self._tube_var[1].get(),
+            "calib1":    self._calib_factor[0].get(),
+            "calib2":    self._calib_factor[1].get(),
+            "suckback1": self._suckback_var[0].get(),
+            "suckback2": self._suckback_var[1].get(),
         })
         save_settings(self._settings)
         messagebox.showinfo("Saved", "Settings saved successfully!")
