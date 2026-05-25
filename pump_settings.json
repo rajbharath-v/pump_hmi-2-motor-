@@ -3,10 +3,23 @@
   "slave1": 1,
   "slave2": 2,
   "tube1": "4x1mm",
-  "tube2": "2x1mm",
+  "tube2": "4x1mm",
   "calib1": 1.0,
-  "calib2": 1.0,
-  "recipes": [],
-  "suckback1": 28.0,
-  "suckback2": 141.5
+  "calib2": -4.0,
+  "recipes": [
+    {
+      "channel": 2,
+      "tube": "2x1mm",
+      "vol": 10.0,
+      "time": 2.0,
+      "pause": 1.0,
+      "repeat": 1,
+      "speed": 60.0,
+      "suckback": 0.0
+    }
+  ],
+  "suckback1": 0.0,
+  "suckback2": 0.0,
+  "dir1": "CCW",
+  "dir2": "CCW"
 }
