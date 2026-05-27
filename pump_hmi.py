@@ -1030,13 +1030,19 @@ class PumpHMI(tk.Tk):
                 if start_en and time_matches(sh, sm, ss):
                     if not start_fired[0]:
                         start_fired[0] = True
-                        pump = self._get_pump(idx)
-                        if pump and pump.is_connected():
-                            rpm = self._rpm_var[idx].get()
-                            pump.set_speed(rpm)
-                            pump.set_direction(True)
-                            pump.start()
-                            self.after(0, lambda: self._update_motor_ui(idx))
+                        # Check lock
+                        if self._motor_locked_by[idx] and self._motor_locked_by[idx] != "timing":
+                            pass  # Don't interrupt other page
+                        else:
+                            pump = self._get_pump(idx)
+                            if pump and pump.is_connected():
+                                self._motor_locked_by[idx] = "timing"
+                                rpm = self._rpm_var[idx].get()  # from dashboard
+                                fwd = (self._global_direction[idx].get() == "CW")
+                                pump.set_speed(rpm)
+                                pump.set_direction(fwd)
+                                pump.start()
+                                self.after(0, lambda: self._update_motor_ui(idx))
                         if start_freq == "once":
                             stop_ev.set()
                             return
@@ -1050,6 +1056,7 @@ class PumpHMI(tk.Tk):
                         pump = self._get_pump(idx)
                         if pump and pump.is_connected():
                             pump.stop()
+                            self._motor_locked_by[idx] = None  # Release lock
                             self.after(0, lambda: self._update_motor_ui(idx))
                         if stop_freq == "once":
                             stop_ev.set()
@@ -1190,21 +1197,38 @@ class PumpHMI(tk.Tk):
     def _run_calibration(self, idx):
         pump = self.pump1 if idx == 0 else self.pump2
         if not pump or not pump.is_connected():
-            messagebox.showwarning("Not Connected", f"Connect Channel {idx+1} first.")
+            messagebox.showwarning("Not Connected",
+                "Connect Channel " + str(idx+1) + " first.")
             return
+        locked = self._motor_locked_by[idx]
+        if locked and locked not in (None, "calibration"):
+            messagebox.showwarning("Motor Busy",
+                "Motor controlled by " + str(locked) + ". Stop it there first.")
+            return
+        self._motor_locked_by[idx] = "calibration"
         vol  = self._cal_vol[idx].get()
         rpm  = self._rpm_var[idx].get()
         tube = self._tube_var[idx].get()
-        t    = calc_run_time(tube, rpm, vol) * self._calib_factor[idx].get()
-        info = ("Running {:.2f} mL @ {:.1f} RPM | ".format(vol, rpm) +
-                "Time: {:.2f} s | Flow: {:.3f} mL/min".format(t, calc_flow_rate(tube, rpm)))
+        fwd  = (self._global_direction[idx].get() == "CW")
+        t    = self._cal_time[idx].get() if self._cal_time[idx].get() > 0 else calc_run_time(tube, rpm, vol)
+        flow = calc_flow_rate(tube, rpm)
+        if self._cal_actual[idx]:
+            self._cal_actual[idx].set(vol)
+        info = "Running {:.2f} mL @ {:.1f} RPM | Time: {:.2f}s | Flow: {:.3f} mL/min | {} | {}".format(
+            vol, rpm, t, flow, tube, "CW" if fwd else "CCW")
         self._calib_info[idx].config(text=info)
         def run():
             pump.set_speed(rpm)
-            pump.set_direction(True)
+            pump.set_direction(fwd)
+            time.sleep(0.1)
             pump.start()
             time.sleep(t)
             pump.stop()
+            self._motor_locked_by[idx] = None
+            self.after(0, lambda: self._update_motor_ui(idx))
+            self.after(0, lambda: self._calib_info[idx].config(
+                text="Done! Measure actual liquid, enter below, click APPLY.",
+                fg=C["green"]))
         threading.Thread(target=run, daemon=True).start()
 
     def _reset_calibration(self, idx):
@@ -1822,11 +1846,8 @@ class PumpHMI(tk.Tk):
             messagebox.showwarning("Not Connected",
                                    f"Connect Channel {idx+1} in Settings first.")
             return
-        # Cross-page lock — check if dispensing page is running
-        locked_by = self._motor_locked_by[idx]
-        if locked_by == "dispensing":
-            messagebox.showwarning("Motor Busy",
-                "Pump is controlled by Dispensing. Stop it from Dispensing tab first.")
+        if not self._check_lock(idx, "dashboard"):
+            return
         self._motor_locked_by[idx] = "dashboard"
         def run():
             rpm = self._rpm_var[idx].get()
@@ -1944,18 +1965,11 @@ class PumpHMI(tk.Tk):
 
             return
 
-        # Cross-page lock — check if dashboard is running
-        locked_by = self._motor_locked_by[idx]
-        if locked_by == "dashboard":
-            messagebox.showwarning("Motor Busy",
-                "Pump is controlled by Dashboard. Stop it from Dashboard tab first.")
-        # DOUBLE-START PROTECTION — ignore if already running from dispensing
+        if not self._check_lock(idx, "dispensing"):
+            return
         existing = self._stop_events.get(idx)
         if existing and not existing.is_set():
-            # Already running from dispensing — do nothing
             return
-
-        # Set lock BEFORE starting
         self._motor_locked_by[idx] = "dispensing"
 
         # Stop any existing dispense cleanly
@@ -1985,8 +1999,11 @@ class PumpHMI(tk.Tk):
                     self._disp_status[idx].config(
                         text=f"Dispensing {vol:.2f} mL  [{t}]...")
                 ))
+                # Use global direction (not hardcoded forward)
+                actual_fwd = (self._global_direction[idx].get() == "CW")
                 pump.set_speed(speed)
-                pump.set_direction(True)
+                pump.set_direction(actual_fwd)
+                time.sleep(0.1)
                 pump.start()
                 self.after(0, lambda: self._update_motor_ui(idx))
                 run_t = current_run_t
@@ -2012,20 +2029,18 @@ class PumpHMI(tk.Tk):
                     time.sleep(0.1)
 
                 pump.stop()
-                # Suck-back — runs OPPOSITE to run direction
+                # Suck-back — ALWAYS opposite of actual run direction
                 sb_angle = float(self._suckback_var[idx].get())
                 if sb_angle > 0 and speed > 0:
-                    was_cw = (self._global_direction[idx].get() == "CW")
-                    # sb_time = angle/360 * (60/rpm) — time for that rotation
                     sb_time = (sb_angle / 360.0) * (60.0 / speed)
-                    time.sleep(0.05)
-                    pump.set_direction(not was_cw)  # OPPOSITE direction
-                    time.sleep(0.05)
+                    time.sleep(0.1)
+                    pump.set_direction(not actual_fwd)  # OPPOSITE of what ran
+                    time.sleep(0.1)
                     pump.start()
                     time.sleep(sb_time)
                     pump.stop()
-                    time.sleep(0.05)
-                    pump.set_direction(was_cw)  # restore to original
+                    time.sleep(0.1)
+                    pump.set_direction(actual_fwd)  # restore
                 self.after(0, lambda: self._update_motor_ui(idx))
                 # Update total volume
                 self._total_vol[idx] += vol
@@ -2100,6 +2115,44 @@ class PumpHMI(tk.Tk):
                     self._test_result.config(text=msg, fg=C["red"])
 
         threading.Thread(target=test, daemon=True).start()
+
+    def _check_lock(self, idx, caller):
+        """
+        Returns True if OK to run.
+        Returns False and shows warning if another page is controlling the motor.
+        Rules:
+          - If Dispensing toggle is ON → only Dispensing can run
+          - If Timing is active → only Timing can run
+          - Dashboard/Calibration can only run when nothing else is ON
+        """
+        locked = self._motor_locked_by[idx]
+
+        # Check dispensing toggle
+        disp_on = (hasattr(self, "_dispensing_active") and
+                   self._dispensing_active[idx].get())
+        if disp_on and caller != "dispensing":
+            messagebox.showwarning("Dispensing Active",
+                "Pump " + str(idx+1) + " is in Dispensing mode! "
+                "Turn OFF the Dispensing toggle first.")
+            return False
+
+        # Check timing active
+        timer_key = "_timer_stop_" + str(idx)
+        timer_ev = getattr(self, timer_key, None)
+        timer_on = timer_ev is not None and not timer_ev.is_set()
+        if timer_on and caller != "timing":
+            messagebox.showwarning("Timer Active",
+                "Pump " + str(idx+1) + " has an active timer! "
+                "Cancel the timer in Timing tab first.")
+            return False
+
+        # Check general lock from another page
+        if locked and locked != caller:
+            messagebox.showwarning("Motor Busy",
+                "Pump " + str(idx+1) + " is running from " + str(locked) + ". Stop it there first.")
+            return False
+
+        return True
 
     def _apply_global_direction(self, idx):
         """Apply global direction to dashboard and pump immediately."""
