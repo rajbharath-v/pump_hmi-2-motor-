@@ -606,23 +606,26 @@ class PumpHMI(tk.Tk):
                  bg=C["panel"], fg=C["text_dim"]).pack(anchor="w")
 
         self._rpm_var = getattr(self, "_rpm_var", [None, None])
-        self._rpm_var[idx] = tk.DoubleVar(value=60.0)
+        self._rpm_var[idx] = tk.IntVar(value=60)
 
         rpm_row = tk.Frame(parent, bg=C["panel"])
         rpm_row.pack(fill="x", pady=2)
 
-        sl = tk.Scale(rpm_row, from_=0.1, to=350, orient="horizontal",
-                      variable=self._rpm_var[idx], resolution=0.1,
+        sl = tk.Scale(rpm_row, from_=1, to=350, orient="horizontal",
+                      variable=self._rpm_var[idx], resolution=1,
                       bg=C["panel"], fg=C["text"], troughcolor=C["bg"],
                       highlightthickness=0, length=200,
                       command=lambda v, i=idx: self._on_rpm_change(i))
         sl.pack(side="left", fill="x", expand=True)
 
+        # RPM entry — typing also sends to pump
         rpm_entry = tk.Entry(rpm_row, textvariable=self._rpm_var[idx],
                              font=("Consolas", 11), bg=C["input_bg"],
                              fg="white", insertbackground="white",
                              width=7, bd=0)
         rpm_entry.pack(side="left", padx=6)
+        rpm_entry.bind("<Return>",   lambda e, i=idx: self._on_rpm_change(i))
+        rpm_entry.bind("<FocusOut>", lambda e, i=idx: self._rpm_entry_changed(i))
         tk.Label(rpm_row, text="RPM", font=self.f_small,
                  bg=C["panel"], fg=C["text_dim"]).pack(side="left")
 
@@ -759,7 +762,7 @@ class PumpHMI(tk.Tk):
         self._dv_time[idx]  = tk.DoubleVar(value=2.0)
         self._dv_pause[idx] = tk.DoubleVar(value=1.0)
         self._dv_rep[idx]   = tk.IntVar(value=1)
-        self._dv_speed[idx] = tk.DoubleVar(value=60.0)
+        self._dv_speed[idx] = tk.IntVar(value=60)
 
         self._input_box(grid, "Disp. Vol.:", self._dv_vol[idx],  "mL", row=0, col=0)
         self._input_box(grid, "Disp. Time:", self._dv_time[idx], "s",  row=1, col=0)
@@ -775,21 +778,24 @@ class PumpHMI(tk.Tk):
 
         sl_row = tk.Frame(parent, bg=C["panel"])
         sl_row.pack(fill="x", pady=2)
-        sl = tk.Scale(sl_row, from_=0.1, to=350, orient="horizontal",
-                      variable=self._dv_speed[idx], resolution=0.1,
+        sl = tk.Scale(sl_row, from_=1, to=350, orient="horizontal",
+                      variable=self._dv_speed[idx], resolution=1,
                       bg=C["panel"], fg=C["text"],
                       troughcolor=C["bg"], highlightthickness=0,
                       length=200,
                       command=lambda v, i=idx: self._on_disp_speed_change(i))
         sl.pack(side="left", fill="x", expand=True)
 
-        spd_box = tk.Frame(sl_row, bg=C["input_bg"], padx=6, pady=3)
-        spd_box.pack(side="left", padx=4)
-        tk.Label(spd_box, textvariable=self._dv_speed[idx],
-                 font=("Consolas", 11, "bold"),
-                 bg=C["input_bg"], fg="white", width=6).pack(side="left")
-        tk.Label(spd_box, text=" RPM", font=self.f_small,
-                 bg=C["input_bg"], fg="#90CAF9").pack(side="left")
+        # Editable entry
+        spd_entry = tk.Entry(sl_row, textvariable=self._dv_speed[idx],
+                             font=("Consolas", 11, "bold"),
+                             bg=C["input_bg"], fg="white",
+                             insertbackground="white", bd=0, width=6)
+        spd_entry.pack(side="left", padx=4)
+        spd_entry.bind("<Return>",   lambda e, i=idx: self._on_disp_speed_change(i))
+        spd_entry.bind("<FocusOut>", lambda e, i=idx: self._on_disp_speed_change(i))
+        tk.Label(sl_row, text="RPM", font=self.f_small,
+                 bg=C["panel"], fg=C["text_dim"]).pack(side="left", padx=2)
 
         # Speed presets for dispensing
         pr_row = tk.Frame(parent, bg=C["panel"])
@@ -968,122 +974,136 @@ class PumpHMI(tk.Tk):
             parent.after(1000, tick)
         tick()
 
-        # Activate button
-        self._big_btn(parent, "  ACTIVATE TIMER",
+        btn_row = tk.Frame(parent, bg=C["panel"])
+        btn_row.pack(fill="x", pady=8)
+        self._big_btn(btn_row, "  ACTIVATE TIMER",
                       lambda i=idx: self._apply_timing(i),
-                      C["accent"]).pack(fill="x", pady=8)
+                      C["accent"]).pack(side="left", padx=(0,6), fill="x", expand=True)
+
+        cancel_btn = tk.Button(btn_row,
+                               text="No active timer",
+                               command=lambda i=idx: self._cancel_timing(i),
+                               font=self.f_btn, bg=C["border"], fg="white",
+                               relief="flat", padx=12, pady=10,
+                               state="disabled", cursor="hand2")
+        cancel_btn.pack(side="left", fill="x", expand=True)
+        setattr(self, "_timing_cancel_btn_" + str(idx), cancel_btn)
 
         status_lbl = tk.Label(parent, text="Timer not active",
                               font=self.f_small,
                               bg=C["panel"], fg=C["text_dim"])
-        status_lbl.pack()
-        setattr(self, f"_timing_status_{idx}", status_lbl)
+        status_lbl.pack(pady=4)
+        setattr(self, "_timing_status_" + str(idx), status_lbl)
 
-    def _apply_timing(self, idx):
-        """Apply timing schedule — starts a background thread that watches the clock."""
-        # Read start time
-        sh = getattr(self, f"_timing_start_{idx}_h").get()
-        sm = getattr(self, f"_timing_start_{idx}_m").get()
-        ss = getattr(self, f"_timing_start_{idx}_s").get()
-        start_en = getattr(self, f"_timing_start_{idx}_en").get()
-
-        # Read stop time
-        eh = getattr(self, f"_timing_stop_{idx}_h").get()
-        em = getattr(self, f"_timing_stop_{idx}_m").get()
-        es = getattr(self, f"_timing_stop_{idx}_s").get()
-        stop_en = getattr(self, f"_timing_stop_{idx}_en").get()
-
-        start_freq = getattr(self, f"_timing_start_{idx}_freq").get()
-        stop_freq  = getattr(self, f"_timing_stop_{idx}_freq").get()
-
-        if not start_en and not stop_en:
-            messagebox.showinfo("Timing",
-                "Both Start and Stop are OFF. Enable at least one.")
-            return
-
-        # Validate: if both enabled, stop must be AFTER start
-        if start_en and stop_en:
-            start_total = sh * 3600 + sm * 60 + ss
-            stop_total  = eh * 3600 + em * 60 + es
-            if stop_total <= start_total:
-                messagebox.showerror("Invalid Time",
-                    "Stop time must be AFTER start time! "
-                    "Set a later stop time.")
-                return
-        key = f"_timer_stop_{idx}"
+    def _cancel_timing(self, idx):
+        key = "_timer_stop_" + str(idx)
         ev = getattr(self, key, None)
         if ev:
             ev.set()
-        stop_ev = threading.Event()
-        setattr(self, key, stop_ev)
+        setattr(self, key, None)
+        if self._motor_locked_by[idx] == "timing":
+            self._motor_locked_by[idx] = None
+        sl = getattr(self, "_timing_status_" + str(idx), None)
+        if sl: sl.config(text="Timer cancelled.", fg=C["text_dim"])
+        btn = getattr(self, "_timing_cancel_btn_" + str(idx), None)
+        if btn: btn.config(state="disabled", bg=C["border"], text="No active timer")
 
+    def _apply_timing(self, idx):
+        sh = getattr(self, "_timing_start_" + str(idx) + "_h").get()
+        sm = getattr(self, "_timing_start_" + str(idx) + "_m").get()
+        ss = getattr(self, "_timing_start_" + str(idx) + "_s").get()
+        start_en = getattr(self, "_timing_start_" + str(idx) + "_en").get()
+        eh = getattr(self, "_timing_stop_" + str(idx) + "_h").get()
+        em = getattr(self, "_timing_stop_" + str(idx) + "_m").get()
+        es = getattr(self, "_timing_stop_" + str(idx) + "_s").get()
+        stop_en = getattr(self, "_timing_stop_" + str(idx) + "_en").get()
+        start_freq = getattr(self, "_timing_start_" + str(idx) + "_freq").get()
+        stop_freq  = getattr(self, "_timing_stop_"  + str(idx) + "_freq").get()
+
+        if not start_en and not stop_en:
+            messagebox.showinfo("Timing", "Both Start and Stop are OFF. Enable at least one.")
+            return
+
+        # Validate time values
+        for h,m,s,name in [(sh,sm,ss,"Start"),(eh,em,es,"Stop")]:
+            if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
+                messagebox.showerror("Invalid Time",
+                    name + " time out of range. HH=0-23, MM=0-59, SS=0-59")
+                return
+
+        # Stop must be after start
+        if start_en and stop_en:
+            if (eh*3600+em*60+es) <= (sh*3600+sm*60+ss):
+                messagebox.showerror("Invalid Time",
+                    "Stop time must be AFTER start time!")
+                return
+
+        # Cancel any existing timer first
+        self._cancel_timing(idx)
+        time.sleep(0.1)
+
+        stop_ev = threading.Event()
+        setattr(self, "_timer_stop_" + str(idx), stop_ev)
         start_fired = [False]
         stop_fired  = [False]
 
         def time_matches(h, m, s):
             now = datetime.now()
-            return now.hour == h and now.minute == m and now.second == s
+            return now.hour==h and now.minute==m and now.second==s
 
         def watch():
             while not stop_ev.is_set():
-                # Start trigger
                 if start_en and time_matches(sh, sm, ss):
                     if not start_fired[0]:
                         start_fired[0] = True
-                        # Check lock
-                        if self._motor_locked_by[idx] and self._motor_locked_by[idx] != "timing":
-                            pass  # Don't interrupt other page
-                        else:
-                            pump = self._get_pump(idx)
-                            if pump and pump.is_connected():
-                                self._motor_locked_by[idx] = "timing"
-                                rpm = self._rpm_var[idx].get()  # from dashboard
-                                fwd = (self._global_direction[idx].get() == "CW")
-                                pump.set_speed(rpm)
-                                pump.set_direction(fwd)
-                                pump.start()
-                                self.after(0, lambda: self._update_motor_ui(idx))
-                        if start_freq == "once":
+                        pump = self._get_pump(idx)
+                        if pump and pump.is_connected():
+                            self._motor_locked_by[idx] = "timing"
+                            rpm = self._rpm_var[idx].get()
+                            fwd = (self._global_direction[idx].get() == "CW")
+                            pump.set_speed(rpm)
+                            pump.set_direction(fwd)
+                            pump.start()
+                            self.after(0, lambda: self._update_motor_ui(idx))
+                        if start_freq == "once" and not stop_en:
                             stop_ev.set()
                             return
                 else:
                     start_fired[0] = False
 
-                # Stop trigger
                 if stop_en and time_matches(eh, em, es):
                     if not stop_fired[0]:
                         stop_fired[0] = True
                         pump = self._get_pump(idx)
                         if pump and pump.is_connected():
                             pump.stop()
-                            self._motor_locked_by[idx] = None  # Release lock
-                            self.after(0, lambda: self._update_motor_ui(idx))
+                        self._motor_locked_by[idx] = None
+                        self.after(0, lambda: self._update_motor_ui(idx))
                         if stop_freq == "once":
                             stop_ev.set()
+                            self.after(0, lambda i=idx: self._cancel_timing(i))
                             return
                 else:
                     stop_fired[0] = False
-
                 time.sleep(0.5)
 
         threading.Thread(target=watch, daemon=True).start()
 
-        # Build confirmation message
         parts = []
         if start_en:
-            parts.append(f"START at {sh:02d}:{sm:02d}:{ss:02d} ({start_freq})")
+            parts.append("START {:02d}:{:02d}:{:02d} ({})".format(sh,sm,ss,start_freq))
         if stop_en:
-            parts.append(f"STOP  at {eh:02d}:{em:02d}:{es:02d} ({stop_freq})")
+            parts.append("STOP  {:02d}:{:02d}:{:02d} ({})".format(eh,em,es,stop_freq))
 
-        msg = "Pump " + str(idx+1) + " Timer Active!\n\n" + "\n".join(parts) + "\n\nTimer running in background."
+        sl = getattr(self, "_timing_status_" + str(idx), None)
+        if sl: sl.config(text="ACTIVE: " + " | ".join(parts), fg=C["green"])
+        btn = getattr(self, "_timing_cancel_btn_" + str(idx), None)
+        if btn: btn.config(state="normal", bg=C["red"], text="CANCEL TIMER")
+
+        msg = ("Pump " + str(idx+1) + " timer set!\n\n" +
+               "\n".join(parts) + "\n\nClick CANCEL TIMER to stop.")
         messagebox.showinfo("Timer Active", msg)
-        status_lbl = getattr(self, "_timing_status_" + str(idx), None)
-        if status_lbl:
-            status_lbl.config(text="TIMER ACTIVE: " + " | ".join(parts), fg=C["green"])
 
-    # ------------------------------------------------------------------
-    # TAB 4 — CALIBRATION
-    # ------------------------------------------------------------------
     def _build_tab_calibration(self):
         tab = self._tab_frame("Calibration")
 
@@ -1119,8 +1139,19 @@ class PumpHMI(tk.Tk):
 
         grid = tk.Frame(parent, bg=C["panel"])
         grid.pack(fill="x", pady=4)
-        self._input_box(grid, "Target Vol.:", self._cal_vol[idx],  "mL", row=0, col=0)
-        self._input_box(grid, "Run Time:",    self._cal_time[idx], "s",  row=1, col=0)
+        self._input_box(grid, "Target Vol.:", self._cal_vol[idx], "mL", row=0, col=0)
+        # Run time auto-calculated from tube + rpm — show as info only
+        calc_fr = tk.Frame(grid, bg=C["panel"])
+        calc_fr.grid(row=1, column=0, columnspan=4, sticky="w", pady=4)
+        tk.Label(calc_fr, text="Run Time:", font=self.f_label,
+                 bg=C["panel"], fg=C["text_dim"]).pack(side="left")
+        self._calib_time_lbl = getattr(self, "_calib_time_lbl", [None, None])
+        self._calib_time_lbl[idx] = tk.Label(calc_fr, text="auto",
+                                              font=("Consolas", 11, "bold"),
+                                              bg=C["panel"], fg=C["accent"])
+        self._calib_time_lbl[idx].pack(side="left", padx=6)
+        tk.Label(calc_fr, text="seconds  (auto from RPM + tube)",
+                 font=("Segoe UI", 8), bg=C["panel"], fg=C["text_dim"]).pack(side="left")
 
         btn_row = tk.Frame(parent, bg=C["panel"])
         btn_row.pack(fill="x", pady=6)
@@ -1877,6 +1908,7 @@ class PumpHMI(tk.Tk):
         threading.Thread(target=force_stop, daemon=True).start()
 
     def _set_rpm(self, idx, rpm):
+        rpm = int(rpm)
         self._rpm_var[idx].set(rpm)
         pump = self._get_pump(idx)
         if pump and pump.is_connected():
@@ -1884,32 +1916,43 @@ class PumpHMI(tk.Tk):
                 try: p.set_speed(r)
                 except: pass
             threading.Thread(target=send, daemon=True).start()
-        # Update displays immediately
         tube = self._tube_var[idx].get()
         flow = calc_flow_rate(tube, rpm)
         if hasattr(self, "_flow_lbl") and self._flow_lbl[idx]:
             self._flow_lbl[idx].config(text=f"{flow:.3f} mL/min")
         if hasattr(self, "_rpm_lbl") and self._rpm_lbl[idx]:
-            self._rpm_lbl[idx].config(text=f"{rpm:.1f} RPM")
-        self._rpm_display_lbl = getattr(self, "_rpm_display_lbl", [None,None])
+            self._rpm_lbl[idx].config(text=f"{rpm} RPM")
+
+    def _rpm_entry_changed(self, idx):
+        """Called when user types RPM and presses Enter or clicks away."""
+        try:
+            rpm = int(self._rpm_var[idx].get())
+            rpm = max(1, min(350, rpm))
+            self._rpm_var[idx].set(rpm)
+            self._on_rpm_change(idx)
+        except (ValueError, tk.TclError):
+            self._rpm_var[idx].set(60)
 
     def _on_rpm_change(self, idx):
         pump = self._get_pump(idx)
-        rpm  = self._rpm_var[idx].get()
-        # Always send speed if connected — whether running or not
+        try:
+            rpm = int(self._rpm_var[idx].get())
+            rpm = max(1, min(350, rpm))
+        except (ValueError, tk.TclError):
+            rpm = 60
+        # Send to pump if connected
         if pump and pump.is_connected():
             def send_rpm(r=rpm, p=pump):
-                try:
-                    p.set_speed(r)
+                try: p.set_speed(r)
                 except: pass
             threading.Thread(target=send_rpm, daemon=True).start()
-        # Always update display
+        # Update display labels
         tube = self._tube_var[idx].get()
         flow = calc_flow_rate(tube, rpm)
         if hasattr(self, "_flow_lbl") and self._flow_lbl[idx]:
             self._flow_lbl[idx].config(text=f"{flow:.3f} mL/min")
         if hasattr(self, "_rpm_lbl") and self._rpm_lbl[idx]:
-            self._rpm_lbl[idx].config(text=f"{rpm:.1f} RPM")
+            self._rpm_lbl[idx].config(text=f"{rpm} RPM")
 
     def _set_direction(self, idx):
         d = self._dir_var[idx].get()

@@ -2,7 +2,7 @@
   "port": "COM9",
   "slave1": 1,
   "slave2": 2,
-  "tube1": "4x1mm",
+  "tube1": "1x1mm",
   "tube2": "4x1mm",
   "calib1": 1.0,
   "calib2": 1.0,
