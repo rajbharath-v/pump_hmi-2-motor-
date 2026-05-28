@@ -656,8 +656,26 @@ class PumpHMI(tk.Tk):
             self._build_dispensing_panel(body, i)
 
     def _build_dispensing_panel(self, parent, idx):
+        # ── Validators: only correct data types accepted in every field ──────
+        # Float validator: digits + at most one decimal point, no negatives
+        def _ok_float(s):
+            if s == "" or s == ".":
+                return True
+            if s.count(".") > 1 or s.startswith("-"):
+                return False
+            parts = s.split(".")
+            return all(p == "" or p.isdigit() for p in parts)
+
+        # Integer validator: digits only, no negatives
+        def _ok_int(s):
+            return s == "" or (s.isdigit() and len(s) <= 6)
+
+        vcmd_float = (self.register(_ok_float), "%P")
+        vcmd_int   = (self.register(_ok_int),   "%P")
+
+        # ── Header: title + ON/OFF toggle ────────────────────────────────────
         top_fr = tk.Frame(parent, bg=C["panel"])
-        top_fr.pack(fill="x", pady=(0,6))
+        top_fr.pack(fill="x", pady=(0, 6))
 
         self._disp_mode = getattr(self, "_disp_mode", [None, None])
         self._disp_mode[idx] = tk.StringVar(value="volume")
@@ -671,7 +689,7 @@ class PumpHMI(tk.Tk):
         on_off_fr.pack(side="right", padx=8)
         tk.Label(on_off_fr, text="Dispensing:",
                  font=self.f_label, bg=C["panel"],
-                 fg=C["text_dim"]).pack(side="left", padx=(0,6))
+                 fg=C["text_dim"]).pack(side="left", padx=(0, 6))
 
         self._disp_toggle_btn = getattr(self, "_disp_toggle_btn", [None, None])
         toggle_btn = tk.Button(on_off_fr, text="OFF",
@@ -682,91 +700,111 @@ class PumpHMI(tk.Tk):
         toggle_btn.pack(side="left")
         self._disp_toggle_btn[idx] = toggle_btn
 
-        def make_toggle(btn, var, i):
+        def _make_toggle(btn, var, i):
             def toggle():
                 new_val = not var.get()
                 var.set(new_val)
-                if new_val:
-                    btn.config(text="ON", bg=C["green"])
-                else:
-                    btn.config(text="OFF", bg=C["red"])
+                btn.config(text="ON" if new_val else "OFF",
+                           bg=C["green"] if new_val else C["red"])
+                if not new_val:
                     self._stop_dispense(i)
             return toggle
-        toggle_btn.config(
-            command=make_toggle(toggle_btn,
-                                self._dispensing_active[idx], idx))
+        toggle_btn.config(command=_make_toggle(toggle_btn, self._dispensing_active[idx], idx))
 
-        mode_fr = tk.Frame(parent, bg=C["panel"])
-        mode_fr.pack(fill="x", pady=(0, 8))
+        tk.Frame(parent, bg=C["border"], height=1).pack(fill="x", pady=6)
 
-        sep = tk.Frame(parent, bg=C["border"], height=1)
-        sep.pack(fill="x", pady=6)
+        # ── Validated input fields ────────────────────────────────────────────
+        # Default time: calculated so that 10 mL at 60 RPM with 2x1mm tube is achievable
+        default_time = round(calc_run_time("2x1mm", 60, 10.0))  # ≈ 70 s
+
+        self._dv_vol   = getattr(self, "_dv_vol",   [None, None])
+        self._dv_time  = getattr(self, "_dv_time",  [None, None])
+        self._dv_pause = getattr(self, "_dv_pause", [None, None])
+        self._dv_rep   = getattr(self, "_dv_rep",   [None, None])
+        self._dv_speed = getattr(self, "_dv_speed", [None, None])  # kept for compat
+
+        self._dv_vol[idx]   = tk.DoubleVar(value=10.0)
+        self._dv_time[idx]  = tk.DoubleVar(value=float(default_time))
+        self._dv_pause[idx] = tk.DoubleVar(value=1.0)
+        self._dv_rep[idx]   = tk.IntVar(value=1)
+        self._dv_speed[idx] = tk.IntVar(value=60)   # kept for compat, not shown
 
         grid = tk.Frame(parent, bg=C["panel"])
         grid.pack(fill="x", pady=4)
 
-        self._dv_vol   = getattr(self, "_dv_vol",  [None, None])
-        self._dv_time  = getattr(self, "_dv_time", [None, None])
-        self._dv_pause = getattr(self, "_dv_pause",[None, None])
-        self._dv_rep   = getattr(self, "_dv_rep",  [None, None])
-        self._dv_speed = getattr(self, "_dv_speed",[None, None])
+        field_defs = [
+            ("Disp. Vol.:", self._dv_vol[idx],   "mL", vcmd_float, 10),
+            ("Disp. Time:", self._dv_time[idx],  "s",  vcmd_float, 10),
+            ("Pause Time:", self._dv_pause[idx], "s",  vcmd_float, 10),
+            ("Repeat:",     self._dv_rep[idx],   "",   vcmd_int,   10),
+        ]
+        for row, (lbl, var, unit, vcmd, w) in enumerate(field_defs):
+            tk.Label(grid, text=lbl, font=self.f_label,
+                     bg=C["panel"], fg=C["text_dim"]).grid(
+                         row=row, column=0, sticky="w", pady=3, padx=(0, 4))
+            fr = tk.Frame(grid, bg=C["input_bg"], padx=4, pady=3)
+            fr.grid(row=row, column=1, sticky="w", pady=3, padx=4)
+            tk.Entry(fr, textvariable=var,
+                     font=("Consolas", 13, "bold"),
+                     bg=C["input_bg"], fg=C["input_fg"],
+                     insertbackground="white", bd=0, width=w,
+                     validate="key", validatecommand=vcmd).pack(side="left")
+            if unit:
+                tk.Label(fr, text=f" {unit}", font=self.f_small,
+                         bg=C["input_bg"], fg="#90CAF9").pack(side="left")
 
-        self._dv_vol[idx]   = tk.DoubleVar(value=10.0)
-        self._dv_time[idx]  = tk.DoubleVar(value=2.0)
-        self._dv_pause[idx] = tk.DoubleVar(value=1.0)
-        self._dv_rep[idx]   = tk.IntVar(value=1)
-        self._dv_speed[idx] = tk.IntVar(value=60)
+        tk.Frame(parent, bg=C["border"], height=1).pack(fill="x", pady=8)
 
-        self._input_box(grid, "Disp. Vol.:", self._dv_vol[idx],  "mL", row=0, col=0)
-        self._input_box(grid, "Disp. Time:", self._dv_time[idx], "s",  row=1, col=0)
-        self._input_box(grid, "Pause Time:", self._dv_pause[idx],"s",  row=2, col=0)
-        self._input_box(grid, "Repeat:",     self._dv_rep[idx],  "",   row=3, col=0)
-        self._input_box(grid, "Speed:",      self._dv_speed[idx],"RPM",row=4, col=0)
+        # ── Dashboard speed display (reference) ───────────────────────────────
+        dash_fr = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
+        dash_fr.pack(fill="x", pady=(0, 4))
+        dash_row = tk.Frame(dash_fr, bg=C["row_alt"])
+        dash_row.pack(fill="x")
+        tk.Label(dash_row, text="Dashboard Speed (manual run):",
+                 font=self.f_label, bg=C["row_alt"], fg=C["text_dim"]).pack(side="left")
+        dash_box = tk.Frame(dash_row, bg=C["input_bg"], padx=10, pady=4)
+        dash_box.pack(side="left", padx=8)
+        self._disp_dash_rpm = getattr(self, "_disp_dash_rpm", [None, None])
+        self._disp_dash_rpm[idx] = tk.Label(dash_box, text="--",
+                                             font=("Consolas", 14, "bold"),
+                                             bg=C["input_bg"], fg="#90CAF9")
+        self._disp_dash_rpm[idx].pack(side="left")
+        tk.Label(dash_box, text=" RPM", font=self.f_small,
+                 bg=C["input_bg"], fg="#546e7a").pack(side="left")
+        tk.Label(dash_fr, text="Set on Dashboard tab  |  used only when Disp. Time = 0",
+                 font=("Segoe UI", 8), bg=C["row_alt"], fg=C["text_dim"]).pack(anchor="w")
 
-        sep_sl = tk.Frame(parent, bg=C["border"], height=1)
-        sep_sl.pack(fill="x", pady=6)
+        # ── Calculated result: Vol + Time → Required RPM ─────────────────────
+        result_fr = tk.Frame(parent, bg=C["input_bg"], padx=12, pady=10)
+        result_fr.pack(fill="x", pady=2)
 
-        spd_info = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
-        spd_info.pack(fill="x", pady=4)
-        spd_row = tk.Frame(spd_info, bg=C["row_alt"])
-        spd_row.pack(fill="x")
-        tk.Label(spd_row, text="Speed (from Dashboard):",
-                 font=self.f_label, bg=C["row_alt"],
-                 fg=C["text_dim"]).pack(side="left")
+        tk.Label(result_fr, text="REQUIRED RPM  —  calculated from Vol ÷ Time",
+                 font=self.f_small, bg=C["input_bg"], fg="#90CAF9").pack(anchor="w")
 
-        spd_display_fr = tk.Frame(spd_row, bg=C["input_bg"], padx=10, pady=4)
-        spd_display_fr.pack(side="left", padx=8)
+        rpm_row = tk.Frame(result_fr, bg=C["input_bg"])
+        rpm_row.pack(fill="x", pady=(4, 0))
+
         self._disp_rpm_display = getattr(self, "_disp_rpm_display", [None, None])
-        self._disp_rpm_display[idx] = tk.Label(spd_display_fr,
-                                                text="60",
-                                                font=("Consolas", 14, "bold"),
+        self._disp_rpm_display[idx] = tk.Label(rpm_row, text="---",
+                                                font=("Consolas", 32, "bold"),
                                                 bg=C["input_bg"], fg="#64FFDA")
         self._disp_rpm_display[idx].pack(side="left")
-        tk.Label(spd_display_fr, text=" RPM",
-                 font=self.f_small, bg=C["input_bg"],
-                 fg="#90CAF9").pack(side="left")
-        tk.Label(spd_info,
-                 text="Change speed on Dashboard tab to adjust dispensing speed",
-                 font=("Segoe UI", 8), bg=C["row_alt"],
-                 fg=C["text_dim"]).pack(anchor="w")
+        tk.Label(rpm_row, text=" RPM", font=("Segoe UI", 13),
+                 bg=C["input_bg"], fg="#90CAF9").pack(side="left", pady=4)
 
-        calc_fr = tk.Frame(parent, bg=C["panel"], padx=8, pady=4)
-        calc_fr.pack(fill="x", pady=2)
         self._calc_time_lbl = getattr(self, "_calc_time_lbl", [None, None])
-        self._calc_time_lbl[idx] = tk.Label(calc_fr,
-                                             text="Set volume to see run time",
+        self._calc_time_lbl[idx] = tk.Label(result_fr,
+                                             text="Enter volume and time above",
                                              font=self.f_small,
-                                             bg=C["panel"], fg=C["accent"])
-        self._calc_time_lbl[idx].pack(anchor="w")
+                                             bg=C["input_bg"], fg="#90CAF9",
+                                             wraplength=300, justify="left")
+        self._calc_time_lbl[idx].pack(anchor="w", pady=(4, 0))
 
-        self._dv_vol[idx].trace_add("write",
-            lambda *a, i=idx: self._update_calc_time(i))
+        tk.Frame(parent, bg=C["border"], height=1).pack(fill="x", pady=8)
 
-        sep2 = tk.Frame(parent, bg=C["border"], height=1)
-        sep2.pack(fill="x", pady=6)
-
+        # ── Progress & status ─────────────────────────────────────────────────
         self._disp_prog = getattr(self, "_disp_prog", [None, None])
-        self._disp_prog[idx] = ttk.Progressbar(parent, mode="determinate", length=300)
+        self._disp_prog[idx] = ttk.Progressbar(parent, mode="determinate")
         self._disp_prog[idx].pack(fill="x", pady=4)
 
         self._disp_status = getattr(self, "_disp_status", [None, None])
@@ -783,19 +821,17 @@ class PumpHMI(tk.Tk):
 
         btn_row = tk.Frame(parent, bg=C["panel"])
         btn_row.pack(fill="x", pady=6)
-
         self._big_btn(btn_row, "  START",
                       lambda i=idx: self._run_dispense(i),
                       C["green"]).pack(side="left", padx=(0, 6))
-
         self._big_btn(btn_row, "  STOP",
                       lambda i=idx: self._stop_dispense(i),
                       C["red"]).pack(side="left")
 
-        info_fr = tk.Frame(parent, bg=C["row_alt"], padx=8, pady=6)
-        info_fr.pack(fill="x", pady=6)
-        tk.Label(info_fr, text="Calculated run time will show here",
-                 font=self.f_small, bg=C["row_alt"], fg=C["text_dim"]).pack()
+        # ── Live calculation traces ───────────────────────────────────────────
+        self._dv_vol[idx].trace_add("write",  lambda *a, i=idx: self._update_calc_time(i))
+        self._dv_time[idx].trace_add("write", lambda *a, i=idx: self._update_calc_time(i))
+        parent.after(150, lambda i=idx: self._update_calc_time(i))
 
     def _update_disp_mode(self, idx):
         pass
@@ -988,52 +1024,67 @@ class PumpHMI(tk.Tk):
                 return
 
         self._cancel_timing(idx)
-        time.sleep(0.1)
+        # No sleep here — sleeping in the UI thread freezes the window.
 
         stop_ev = threading.Event()
         setattr(self, "_timer_stop_" + str(idx), stop_ev)
-        start_fired = [False]
-        stop_fired  = [False]
 
-        def time_matches(h, m, s):
-            now = datetime.now()
-            return now.hour==h and now.minute==m and now.second==s
+        # Snapshot Tkinter vars in the UI thread — never read StringVar/IntVar
+        # from a background thread (Tkinter is not thread-safe).
+        snap_rpm = int(self._rpm_var[idx].get())
+        snap_fwd = (self._global_direction[idx].get() == "CW")
+
+        # Track the (hour, minute) the action last fired so "daily" repeats
+        # correctly and "once" doesn't re-fire within the same minute.
+        start_fired_min = [None]
+        stop_fired_min  = [None]
+
+        def time_in_window(h, m, s):
+            """True if current wall-clock is within ±1 s of target.
+            A ±1 s window prevents missing the exact second due to OS
+            scheduling jitter when the loop sleeps 0.25 s per tick."""
+            now_s = (datetime.now().hour * 3600
+                     + datetime.now().minute * 60
+                     + datetime.now().second)
+            tgt_s = h * 3600 + m * 60 + s
+            return abs(now_s - tgt_s) <= 1
 
         def watch():
             while not stop_ev.is_set():
-                if start_en and time_matches(sh, sm, ss):
-                    if not start_fired[0]:
-                        start_fired[0] = True
+                now     = datetime.now()
+                now_min = (now.hour, now.minute)
+
+                # ── START action ─────────────────────────────────────────
+                if start_en and time_in_window(sh, sm, ss):
+                    if start_fired_min[0] != now_min:
+                        start_fired_min[0] = now_min
                         pump = self._get_pump(idx)
                         if pump and pump.is_connected():
                             self._motor_locked_by[idx] = "timing"
-                            rpm = self._rpm_var[idx].get()
-                            fwd = (self._global_direction[idx].get() == "CW")
-                            pump.set_speed(rpm)
-                            pump.set_direction(fwd)
+                            pump.set_speed(snap_rpm)
+                            pump.set_direction(snap_fwd)
                             pump.start()
-                            self.after(0, lambda: self._update_motor_ui(idx))
+                            self.after(0, lambda i=idx: self._update_motor_ui(i))
                         if start_freq == "once" and not stop_en:
                             stop_ev.set()
+                            self.after(200, lambda i=idx: self._reset_timer_ui(i))
                             return
-                else:
-                    start_fired[0] = False
 
-                if stop_en and time_matches(eh, em, es):
-                    if not stop_fired[0]:
-                        stop_fired[0] = True
+                # ── STOP action ──────────────────────────────────────────
+                if stop_en and time_in_window(eh, em, es):
+                    if stop_fired_min[0] != now_min:
+                        stop_fired_min[0] = now_min
                         pump = self._get_pump(idx)
                         if pump and pump.is_connected():
                             pump.stop()
                         self._motor_locked_by[idx] = None
-                        self.after(0, lambda: self._update_motor_ui(idx))
+                        self.after(0, lambda i=idx: self._update_motor_ui(i))
                         if stop_freq == "once":
                             stop_ev.set()
-                            self.after(500, lambda i=idx: self._reset_timer_ui(i))
+                            self.after(200, lambda i=idx: self._reset_timer_ui(i))
                             return
-                else:
-                    stop_fired[0] = False
-                time.sleep(0.5)
+
+                time.sleep(0.25)   # tight poll — won't miss a second
 
         threading.Thread(target=watch, daemon=True).start()
 
@@ -1785,41 +1836,97 @@ class PumpHMI(tk.Tk):
         self._update_calc_time(idx)
 
     def _update_calc_time(self, idx):
+        """
+        Core calculation: Vol + Disp.Time → Required RPM.
+        This is what the user sets: "I want X mL in Y seconds — what RPM do I need?"
+        The result is shown visually and used when the motor runs.
+        """
         try:
             vol   = self._dv_vol[idx].get()
-            speed = int(self._rpm_var[idx].get()) if self._rpm_var[idx] else 60
+            t_sec = self._dv_time[idx].get() if self._dv_time[idx] else 0
             tube  = self._tube_var[idx].get()
             calib = self._calib_factor[idx].get()
-            if speed <= 0:
-                return
-            flow  = calc_flow_rate(tube, speed)
-            run_t = calc_run_time(tube, speed, vol) * calib
+            max_flow = TUBE_DATA[tube]["max_flow"]  # mL/min at 350 RPM
 
-            # ── FIX: Validate if volume is physically achievable ──────────
-            # Check if requested volume is impossible at this tube/speed
-            max_possible_flow = TUBE_DATA[tube]["max_flow"]  # at 350 RPM
-            max_possible_per_min = max_possible_flow  # mL/min at max RPM
-            # If user expects to dispense vol in < 1s but flow too low → warn
-            # We warn when calculated run_time > 600s (10 min) — might be intentional,
-            # or when volume requires more than max possible flow
-            min_time_at_max_rpm = (vol / max_possible_flow) * 60.0  # seconds
-            if min_time_at_max_rpm > 0:
-                msg = ("Vol: {:.2f} mL  |  Speed: {} RPM  |  "
-                       "Flow: {:.3f} mL/min  |  Run time: {:.2f} s").format(
-                           vol, speed, flow, run_t)
-                # Append warning if requested run is under minimum possible time
-                dv_time_val = self._dv_time[idx].get() if self._dv_time[idx] else 0
-                if dv_time_val > 0 and dv_time_val < min_time_at_max_rpm:
-                    msg += "  ⚠ NOT POSSIBLE at any speed — increase time or reduce volume"
-                    if hasattr(self, "_calc_time_lbl") and self._calc_time_lbl[idx]:
-                        self._calc_time_lbl[idx].config(text=msg, fg=C["red"])
-                        return
+            if vol <= 0:
+                return
+
+            if t_sec > 0:
+                # ── Main mode: Vol + Time → Required RPM ─────────────────
+                flow_needed = (vol / t_sec) * 60.0          # mL/min
+                rpm_needed  = (flow_needed / max_flow) * MAX_RPM
+
+                if rpm_needed > MAX_RPM:
+                    # Physically impossible with this tube
+                    min_time = (vol / max_flow) * 60.0      # s at 350 RPM
+                    msg = ("⚠  NOT POSSIBLE  |  Vol: {:.2f} mL  |  Time: {:.1f} s  |  "
+                           "Min time at 350 RPM = {:.1f} s  |  "
+                           "Reduce volume OR increase time").format(vol, t_sec, min_time)
+                    clr = C["red"]
+                    rpm_display = "---"
+                elif rpm_needed < 1:
+                    msg = ("⚠  Time too long  |  Vol: {:.2f} mL  |  Time: {:.1f} s  |  "
+                           "Required RPM < 1 — reduce time or increase volume").format(vol, t_sec)
+                    clr = C["orange"]
+                    rpm_display = "< 1"
+                else:
+                    flow_actual = calc_flow_rate(tube, rpm_needed) * calib
+                    msg = ("✔  Vol: {:.2f} mL  |  Time: {:.1f} s  →  "
+                           "Need {:.1f} RPM  |  Flow: {:.3f} mL/min").format(
+                               vol, t_sec, rpm_needed, flow_actual)
+                    clr = C["green"]
+                    rpm_display = "{:.0f}".format(rpm_needed)
+            else:
+                # ── Fallback: show info based on dashboard RPM ────────────
+                speed = int(self._rpm_var[idx].get()) if self._rpm_var[idx] else 60
+                flow  = calc_flow_rate(tube, speed)
+                run_t = calc_run_time(tube, speed, vol) * calib
+                msg   = ("Vol: {:.2f} mL  |  RPM: {}  |  "
+                         "Flow: {:.3f} mL/min  |  Run time: {:.2f} s  "
+                         "(set Disp. Time > 0 to auto-calculate RPM)").format(
+                             vol, speed, flow, run_t)
+                clr = C["accent"]
+                rpm_display = str(speed)
+
             if hasattr(self, "_calc_time_lbl") and self._calc_time_lbl[idx]:
-                self._calc_time_lbl[idx].config(text=msg, fg=C["accent"])
+                self._calc_time_lbl[idx].config(text=msg, fg=clr)
             if hasattr(self, "_disp_rpm_display") and self._disp_rpm_display[idx]:
-                self._disp_rpm_display[idx].config(text=str(speed))
+                # Color the big RPM number: teal=OK, orange=too slow, red=impossible
+                rpm_clr = "#64FFDA" if clr == C["green"] else ("#FFB74D" if clr == C["orange"] else "#FF5252")
+                self._disp_rpm_display[idx].config(text=rpm_display, fg=rpm_clr)
+            # Refresh dashboard speed reference label
+            if hasattr(self, "_disp_dash_rpm") and self._disp_dash_rpm[idx]:
+                try:
+                    dash_rpm = int(self._rpm_var[idx].get()) if self._rpm_var[idx] else "--"
+                    self._disp_dash_rpm[idx].config(text=str(dash_rpm))
+                except Exception:
+                    pass
         except Exception:
             pass
+
+    def _get_required_rpm(self, idx):
+        """Return the RPM needed to deliver _dv_vol in _dv_time seconds.
+        Returns None if impossible, or falls back to dashboard RPM if time=0."""
+        try:
+            vol   = self._dv_vol[idx].get()
+            t_sec = self._dv_time[idx].get() if self._dv_time[idx] else 0
+            tube  = self._tube_var[idx].get()
+            calib = self._calib_factor[idx].get()
+            max_flow = TUBE_DATA[tube]["max_flow"]
+
+            if t_sec > 0 and vol > 0:
+                flow_needed = (vol / t_sec) * 60.0
+                rpm_needed  = (flow_needed / max_flow) * MAX_RPM
+                if 1 <= rpm_needed <= MAX_RPM:
+                    return round(rpm_needed, 1), t_sec * calib
+                return None, None   # impossible
+            else:
+                # Fallback to dashboard RPM + calculated time
+                speed = int(self._rpm_var[idx].get()) if self._rpm_var[idx] else 60
+                run_t = calc_run_time(tube, speed, vol) * calib
+                return speed, run_t
+        except Exception:
+            return None, None
 
     def _update_tube_labels(self):
         for i in range(2):
@@ -1933,6 +2040,8 @@ class PumpHMI(tk.Tk):
             self._flow_lbl[idx].config(text=f"{flow:.3f} mL/min")
         if hasattr(self, "_rpm_lbl") and self._rpm_lbl[idx]:
             self._rpm_lbl[idx].config(text=f"{rpm} RPM")
+        # Keep dispensing tab run-time label + dashboard speed reference in sync
+        self._update_calc_time(idx)
 
     def _set_direction(self, idx):
         d = self._dir_var[idx].get()
@@ -2010,42 +2119,32 @@ class PumpHMI(tk.Tk):
         vol    = self._dv_vol[idx].get()
         pause  = self._dv_pause[idx].get()
         repeat = self._dv_rep[idx].get()
-        speed  = int(self._rpm_var[idx].get())
         tube   = self._tube_var[idx].get()
         calib  = self._calib_factor[idx].get()
 
-        # ── FIX 2: Validate impossible volume/time BEFORE starting ──────────
-        if speed <= 0:
-            messagebox.showerror("Invalid Speed", "Speed must be > 0 RPM.")
-            self._motor_locked_by[idx] = None
-            return
-        flow = calc_flow_rate(tube, speed)
-        if flow <= 0:
-            messagebox.showerror("Invalid", "Flow rate is 0. Check tube and speed settings.")
-            self._motor_locked_by[idx] = None
-            return
+        # ── Vol + Disp.Time → Required RPM ──────────────────────────────────
+        # Use _get_required_rpm: if Disp.Time > 0 → compute RPM from vol/time.
+        # If Disp.Time = 0 → fall back to Dashboard RPM.
+        speed, run_time_override = self._get_required_rpm(idx)
 
-        # Check requested time vs physically possible minimum time
-        requested_time = self._dv_time[idx].get()  # user's "Disp. Time" field (informational)
-        calc_time = calc_run_time(tube, speed, vol) * calib  # actual time needed
-
-        # Max possible flow at 350 RPM for this tube
-        max_flow_at_max_rpm = TUBE_DATA[tube]["max_flow"]  # mL/min at 350 RPM
-        min_possible_time   = (vol / max_flow_at_max_rpm) * 60.0  # seconds
-
-        if requested_time > 0 and requested_time < min_possible_time:
+        if speed is None:
+            # Impossible combination — _update_calc_time already shows the red warning
+            t_sec    = self._dv_time[idx].get() if self._dv_time[idx] else 0
+            max_flow = TUBE_DATA[tube]["max_flow"]
+            min_time = (vol / max_flow) * 60.0
             messagebox.showerror(
                 "Not Possible",
-                f"Cannot dispense {vol:.2f} mL in {requested_time:.1f} s with tube {tube}.\n\n"
-                f"Minimum possible time at 350 RPM (max speed) = {min_possible_time:.1f} s\n"
-                f"At your current {speed} RPM, it needs {calc_time:.1f} s.\n\n"
+                f"Cannot dispense {vol:.2f} mL in {t_sec:.1f} s with tube {tube}.\n\n"
+                f"Minimum possible time at 350 RPM = {min_time:.1f} s\n\n"
                 f"Options:\n"
-                f"  • Reduce volume below {max_flow_at_max_rpm * (requested_time/60):.2f} mL\n"
-                f"  • Increase time to at least {min_possible_time:.1f} s\n"
-                f"  • Use a larger tube (e.g. 4x1mm max {TUBE_DATA['4x1mm']['max_flow']:.1f} mL/min)"
+                f"  • Increase Disp. Time to at least {min_time:.1f} s\n"
+                f"  • Reduce volume below {max_flow * (t_sec/60):.2f} mL\n"
+                f"  • Use a larger tube  (4x1mm max = {TUBE_DATA['4x1mm']['max_flow']:.1f} mL/min)"
             )
             self._motor_locked_by[idx] = None
             return
+
+        speed = max(1, min(350, int(round(speed))))
 
         # Create new stop event
         stop_ev = threading.Event()
@@ -2062,12 +2161,17 @@ class PumpHMI(tk.Tk):
                 if stop_ev.is_set():
                     break
 
-                # Always read LATEST settings at start of each cycle
+                # Read LATEST settings at start of each cycle.
+                # Speed is derived from Vol+Time (or dashboard RPM if time=0).
                 current_tube  = self._tube_var[idx].get()
-                current_speed = int(self._rpm_var[idx].get())
                 current_calib = self._calib_factor[idx].get()
-                # ── FIX 2: run_t is computed HERE inside the thread, from fresh values ──
-                current_run_t = calc_run_time(current_tube, current_speed, vol) * current_calib
+                # Use the pre-calculated speed (Vol+Time→RPM); it was validated above.
+                current_speed = speed
+                # run_time_override = exact time from Vol/Time calculation
+                if run_time_override is not None and run_time_override > 0:
+                    current_run_t = run_time_override * current_calib
+                else:
+                    current_run_t = calc_run_time(current_tube, current_speed, vol) * current_calib
 
                 self.after(0, lambda c=cycle, t=current_tube: (
                     self._disp_counter[idx].config(text=f"{c+1} / {repeat}"),
