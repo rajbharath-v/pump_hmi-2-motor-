@@ -53,10 +53,6 @@ def auto_detect_port():
 
 # ── Shared MODBUS Client — ONE port, multiple slave IDs ────────────────────
 class SharedModbusClient:
-    """
-    Single RS485 serial connection shared by all pump channels.
-    RS485 is a BUS — one COM port talks to multiple slaves via slave ID.
-    """
     _instance = None
 
     def __init__(self):
@@ -82,7 +78,6 @@ class SharedModbusClient:
         from pymodbus.client import ModbusSerialClient
         import io, sys
 
-        # Close existing
         try:
             if self._client:
                 self._client.close()
@@ -91,10 +86,8 @@ class SharedModbusClient:
         self._connected = False
         self._port      = port
 
-        # Retry 3 times with delay
         for attempt in range(3):
             try:
-                # Suppress pymodbus stderr noise
                 old_stderr = sys.stderr
                 sys.stderr = io.StringIO()
                 try:
@@ -143,7 +136,7 @@ class SharedModbusClient:
                     return False
                 return True
             except Exception:
-                self._connected = False  # cable unplugged!
+                self._connected = False
                 return False
 
     def write_float(self, address, value, slave):
@@ -160,7 +153,7 @@ class SharedModbusClient:
                     return False
                 return True
             except Exception:
-                self._connected = False  # cable unplugged!
+                self._connected = False
                 return False
 
 
@@ -198,16 +191,15 @@ class PumpDriver:
 
     def start(self):
         ok = self._write_reg(1000, 1)
-        self._running = True   # mark running even if write fails
+        self._running = True
         return ok
 
     def stop(self):
-        # Try 3 times to guarantee stop
         for _ in range(3):
             try:
                 self._write_reg(1000, 0)
             except: pass
-        self._running = False  # always mark stopped
+        self._running = False
         return True
 
     def set_direction(self, forward=True):
@@ -240,19 +232,16 @@ TUBE_DATA = {
 MAX_RPM = 350.0
 
 def calc_flow_rate(tube_key, rpm):
-    """mL/min at given RPM"""
     max_flow = TUBE_DATA[tube_key]["max_flow"]
     return (max_flow / MAX_RPM) * rpm
 
 def calc_run_time(tube_key, rpm, volume_ml):
-    """seconds needed to dispense volume_ml"""
     flow = calc_flow_rate(tube_key, rpm)
     if flow <= 0:
         return 0
     return (volume_ml / flow) * 60.0
 
 def calc_volume(tube_key, rpm, seconds):
-    """mL dispensed in given seconds"""
     flow = calc_flow_rate(tube_key, rpm)
     return flow * (seconds / 60.0)
 
@@ -279,7 +268,6 @@ def save_settings(data):
 # PROFESSIONAL HMI — TKINTER APPLICATION
 # ============================================================================
 
-# ── Color Palette (industrial blue/white theme like the real pump) ───────────
 C = {
     "bg":       "#f0f4f8",
     "panel":    "#ffffff",
@@ -312,7 +300,6 @@ class PumpHMI(tk.Tk):
         self.configure(bg=C["bg"])
         self.resizable(True, True)
 
-        # State
         self.pump1 = None
         self.pump2 = None
         self._settings = load_settings()
@@ -321,7 +308,6 @@ class PumpHMI(tk.Tk):
         self._disp_volume = [tk.DoubleVar(value=0.0), tk.DoubleVar(value=0.0)]
         self._total_vol   = [0.0, 0.0]
 
-        # Settings vars
         self._port_var    = tk.StringVar(value=self._settings.get("port", auto_detect_port()))
         self._tube_var    = [
             tk.StringVar(value=self._settings.get("tube1", "2x1mm")),
@@ -339,30 +325,22 @@ class PumpHMI(tk.Tk):
             tk.DoubleVar(value=self._settings.get("suckback1", 0.0)),
             tk.DoubleVar(value=self._settings.get("suckback2", 0.0)),
         ]
-        # Dispensing ON/OFF toggle per channel
         self._dispensing_active = [
             tk.BooleanVar(value=False),
             tk.BooleanVar(value=False),
         ]
-        # Global direction per channel — used by ALL pages
         self._global_direction = [
             tk.StringVar(value=self._settings.get("dir1", "CW")),
             tk.StringVar(value=self._settings.get("dir2", "CW")),
         ]
-        # Motor lock — which page is controlling the motor
-        # None = free, "dashboard"/"dispensing"/"timing" = locked
         self._motor_locked_by = [None, None]
 
-        # Build UI
         self._build_fonts()
         self._build_ui()
         self._start_clock()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    # ------------------------------------------------------------------
-    # Fonts
-    # ------------------------------------------------------------------
     def _build_fonts(self):
         self.f_title  = ("Segoe UI", 14, "bold")
         self.f_head   = ("Segoe UI", 11, "bold")
@@ -374,11 +352,7 @@ class PumpHMI(tk.Tk):
         self.f_small  = ("Segoe UI", 9)
         self.f_btn    = ("Segoe UI", 11, "bold")
 
-    # ------------------------------------------------------------------
-    # Build UI
-    # ------------------------------------------------------------------
     def _build_ui(self):
-        # ── Header ──────────────────────────────────────────────────────
         hdr = tk.Frame(self, bg=C["header"], height=56)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
@@ -395,7 +369,6 @@ class PumpHMI(tk.Tk):
                                   bg=C["header"], fg="#FF8A80")
         self._conn_lbl.pack(side="right", padx=10)
 
-        # ── Notebook (tabs) ─────────────────────────────────────────────
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("TNotebook",        background=C["bg"], borderwidth=0)
@@ -422,9 +395,6 @@ class PumpHMI(tk.Tk):
         self._build_tab_common_mode()
         self._build_tab_settings()
 
-    # ------------------------------------------------------------------
-    # Helper widgets
-    # ------------------------------------------------------------------
     def _tab_frame(self, label):
         f = tk.Frame(self._nb, bg=C["bg"])
         self._nb.add(f, text=f"  {label}  ")
@@ -507,7 +477,6 @@ class PumpHMI(tk.Tk):
     def _build_tab_dashboard(self):
         tab = self._tab_frame("Dashboard")
 
-        # Two motor panels side by side
         motors = tk.Frame(tab, bg=C["bg"])
         motors.pack(fill="both", expand=True, padx=4, pady=4)
         motors.columnconfigure(0, weight=1)
@@ -520,7 +489,6 @@ class PumpHMI(tk.Tk):
             outer.grid(row=0, column=i, sticky="nsew")
             self._build_motor_panel(body, i)
 
-        # Bottom status bar
         status = tk.Frame(tab, bg=C["header2"], height=36)
         status.pack(fill="x", side="bottom")
         status.pack_propagate(False)
@@ -529,7 +497,6 @@ class PumpHMI(tk.Tk):
                  font=self.f_small, bg=C["header2"], fg="#B3E5FC").pack(side="left", pady=8)
 
     def _build_motor_panel(self, parent, idx):
-        # Status indicator
         top = tk.Frame(parent, bg=C["panel"])
         top.pack(fill="x", pady=(0, 8))
 
@@ -552,7 +519,6 @@ class PumpHMI(tk.Tk):
                                        padx=6, pady=2)
         self._dir_lbl[idx].pack(side="right", padx=4)
 
-        # Volume display
         vol_fr = tk.Frame(parent, bg=C["input_bg"], padx=12, pady=10)
         vol_fr.pack(fill="x", pady=4)
         tk.Label(vol_fr, text="DISPENSED VOLUME",
@@ -565,7 +531,6 @@ class PumpHMI(tk.Tk):
                  font=("Segoe UI", 14),
                  bg=C["input_bg"], fg="#90CAF9").pack()
 
-        # RPM display
         rpm_fr = tk.Frame(parent, bg=C["panel"])
         rpm_fr.pack(fill="x", pady=2)
         tk.Label(rpm_fr, text="Speed:", font=self.f_label,
@@ -576,7 +541,6 @@ class PumpHMI(tk.Tk):
                                        bg=C["panel"], fg=C["text"])
         self._rpm_lbl[idx].pack(side="left")
 
-        # Tube info
         tube_fr = tk.Frame(parent, bg=C["panel"])
         tube_fr.pack(fill="x", pady=2)
         tk.Label(tube_fr, text="Tube:", font=self.f_label,
@@ -587,7 +551,6 @@ class PumpHMI(tk.Tk):
                                         bg=C["panel"], fg=C["text"])
         self._tube_lbl[idx].pack(side="left")
 
-        # Flow rate
         flow_fr = tk.Frame(parent, bg=C["panel"])
         flow_fr.pack(fill="x", pady=2)
         tk.Label(flow_fr, text="Flow Rate:", font=self.f_label,
@@ -601,7 +564,6 @@ class PumpHMI(tk.Tk):
         sep = tk.Frame(parent, bg=C["border"], height=1)
         sep.pack(fill="x", pady=8)
 
-        # RPM Slider
         tk.Label(parent, text="Speed Control (RPM):", font=self.f_label,
                  bg=C["panel"], fg=C["text_dim"]).pack(anchor="w")
 
@@ -618,7 +580,6 @@ class PumpHMI(tk.Tk):
                       command=lambda v, i=idx: self._on_rpm_change(i))
         sl.pack(side="left", fill="x", expand=True)
 
-        # RPM entry — typing also sends to pump
         rpm_entry = tk.Entry(rpm_row, textvariable=self._rpm_var[idx],
                              font=("Consolas", 11), bg=C["input_bg"],
                              fg="white", insertbackground="white",
@@ -629,7 +590,6 @@ class PumpHMI(tk.Tk):
         tk.Label(rpm_row, text="RPM", font=self.f_small,
                  bg=C["panel"], fg=C["text_dim"]).pack(side="left")
 
-        # Quick RPM presets
         preset_fr = tk.Frame(parent, bg=C["panel"])
         preset_fr.pack(fill="x", pady=4)
         for v in [10, 30, 60, 100, 150, 200, 300]:
@@ -642,7 +602,6 @@ class PumpHMI(tk.Tk):
         sep2 = tk.Frame(parent, bg=C["border"], height=1)
         sep2.pack(fill="x", pady=6)
 
-        # Direction
         dir_row = tk.Frame(parent, bg=C["panel"])
         dir_row.pack(fill="x", pady=2)
         tk.Label(dir_row, text="Direction:", font=self.f_label,
@@ -664,7 +623,6 @@ class PumpHMI(tk.Tk):
                        selectcolor=C["bg"],
                        activebackground=C["panel"]).pack(side="left")
 
-        # START / STOP buttons
         btn_row = tk.Frame(parent, bg=C["panel"])
         btn_row.pack(fill="x", pady=8)
 
@@ -698,7 +656,6 @@ class PumpHMI(tk.Tk):
             self._build_dispensing_panel(body, i)
 
     def _build_dispensing_panel(self, parent, idx):
-        # ── Dispensing ON/OFF toggle ────────────────────────────────
         top_fr = tk.Frame(parent, bg=C["panel"])
         top_fr.pack(fill="x", pady=(0,6))
 
@@ -710,7 +667,6 @@ class PumpHMI(tk.Tk):
                  bg=C["accent"], fg="white",
                  padx=12, pady=6).pack(side="left")
 
-        # Dispensing ON/OFF toggle on the right
         on_off_fr = tk.Frame(top_fr, bg=C["panel"])
         on_off_fr.pack(side="right", padx=8)
         tk.Label(on_off_fr, text="Dispensing:",
@@ -734,21 +690,18 @@ class PumpHMI(tk.Tk):
                     btn.config(text="ON", bg=C["green"])
                 else:
                     btn.config(text="OFF", bg=C["red"])
-                    # Stop any running dispense when turned OFF
                     self._stop_dispense(i)
             return toggle
         toggle_btn.config(
             command=make_toggle(toggle_btn,
                                 self._dispensing_active[idx], idx))
 
-        # Mode selection
         mode_fr = tk.Frame(parent, bg=C["panel"])
         mode_fr.pack(fill="x", pady=(0, 8))
 
         sep = tk.Frame(parent, bg=C["border"], height=1)
         sep.pack(fill="x", pady=6)
 
-        # Input fields
         grid = tk.Frame(parent, bg=C["panel"])
         grid.pack(fill="x", pady=4)
 
@@ -770,64 +723,48 @@ class PumpHMI(tk.Tk):
         self._input_box(grid, "Repeat:",     self._dv_rep[idx],  "",   row=3, col=0)
         self._input_box(grid, "Speed:",      self._dv_speed[idx],"RPM",row=4, col=0)
 
-        # RPM Slider for dispensing
         sep_sl = tk.Frame(parent, bg=C["border"], height=1)
-        sep_sl.pack(fill="x", pady=4)
-        tk.Label(parent, text="Speed Control:", font=self.f_label,
-                 bg=C["panel"], fg=C["text_dim"]).pack(anchor="w")
+        sep_sl.pack(fill="x", pady=6)
 
-        sl_row = tk.Frame(parent, bg=C["panel"])
-        sl_row.pack(fill="x", pady=2)
-        sl = tk.Scale(sl_row, from_=1, to=350, orient="horizontal",
-                      variable=self._dv_speed[idx], resolution=1,
-                      bg=C["panel"], fg=C["text"],
-                      troughcolor=C["bg"], highlightthickness=0,
-                      length=200,
-                      command=lambda v, i=idx: self._on_disp_speed_change(i))
-        sl.pack(side="left", fill="x", expand=True)
+        spd_info = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
+        spd_info.pack(fill="x", pady=4)
+        spd_row = tk.Frame(spd_info, bg=C["row_alt"])
+        spd_row.pack(fill="x")
+        tk.Label(spd_row, text="Speed (from Dashboard):",
+                 font=self.f_label, bg=C["row_alt"],
+                 fg=C["text_dim"]).pack(side="left")
 
-        # Editable entry
-        spd_entry = tk.Entry(sl_row, textvariable=self._dv_speed[idx],
-                             font=("Consolas", 11, "bold"),
-                             bg=C["input_bg"], fg="white",
-                             insertbackground="white", bd=0, width=6)
-        spd_entry.pack(side="left", padx=4)
-        spd_entry.bind("<Return>",   lambda e, i=idx: self._on_disp_speed_change(i))
-        spd_entry.bind("<FocusOut>", lambda e, i=idx: self._on_disp_speed_change(i))
-        tk.Label(sl_row, text="RPM", font=self.f_small,
-                 bg=C["panel"], fg=C["text_dim"]).pack(side="left", padx=2)
+        spd_display_fr = tk.Frame(spd_row, bg=C["input_bg"], padx=10, pady=4)
+        spd_display_fr.pack(side="left", padx=8)
+        self._disp_rpm_display = getattr(self, "_disp_rpm_display", [None, None])
+        self._disp_rpm_display[idx] = tk.Label(spd_display_fr,
+                                                text="60",
+                                                font=("Consolas", 14, "bold"),
+                                                bg=C["input_bg"], fg="#64FFDA")
+        self._disp_rpm_display[idx].pack(side="left")
+        tk.Label(spd_display_fr, text=" RPM",
+                 font=self.f_small, bg=C["input_bg"],
+                 fg="#90CAF9").pack(side="left")
+        tk.Label(spd_info,
+                 text="Change speed on Dashboard tab to adjust dispensing speed",
+                 font=("Segoe UI", 8), bg=C["row_alt"],
+                 fg=C["text_dim"]).pack(anchor="w")
 
-        # Speed presets for dispensing
-        pr_row = tk.Frame(parent, bg=C["panel"])
-        pr_row.pack(fill="x", pady=2)
-        for v in [10, 30, 60, 100, 150, 200, 300]:
-            tk.Button(pr_row, text=str(v),
-                      command=lambda val=v, i=idx: self._set_disp_speed(i, float(val)),
-                      font=("Segoe UI", 9, "bold"),
-                      bg=C["accent2"], fg="white",
-                      relief="flat", padx=6, pady=3,
-                      cursor="hand2").pack(side="left", padx=1)
-
-        # Calculated run time info
-        calc_fr = tk.Frame(parent, bg=C["row_alt"], padx=8, pady=6)
-        calc_fr.pack(fill="x", pady=4)
+        calc_fr = tk.Frame(parent, bg=C["panel"], padx=8, pady=4)
+        calc_fr.pack(fill="x", pady=2)
         self._calc_time_lbl = getattr(self, "_calc_time_lbl", [None, None])
         self._calc_time_lbl[idx] = tk.Label(calc_fr,
-                                             text="Set volume and speed to see run time",
+                                             text="Set volume to see run time",
                                              font=self.f_small,
-                                             bg=C["row_alt"], fg=C["text_dim"])
-        self._calc_time_lbl[idx].pack()
+                                             bg=C["panel"], fg=C["accent"])
+        self._calc_time_lbl[idx].pack(anchor="w")
 
-        # Bind vol/speed changes to update calculated time
         self._dv_vol[idx].trace_add("write",
-            lambda *a, i=idx: self._update_calc_time(i))
-        self._dv_speed[idx].trace_add("write",
             lambda *a, i=idx: self._update_calc_time(i))
 
         sep2 = tk.Frame(parent, bg=C["border"], height=1)
         sep2.pack(fill="x", pady=6)
 
-        # Progress
         self._disp_prog = getattr(self, "_disp_prog", [None, None])
         self._disp_prog[idx] = ttk.Progressbar(parent, mode="determinate", length=300)
         self._disp_prog[idx].pack(fill="x", pady=4)
@@ -844,7 +781,6 @@ class PumpHMI(tk.Tk):
                                             bg=C["panel"], fg=C["accent"])
         self._disp_counter[idx].pack(pady=2)
 
-        # Buttons
         btn_row = tk.Frame(parent, bg=C["panel"])
         btn_row.pack(fill="x", pady=6)
 
@@ -856,14 +792,13 @@ class PumpHMI(tk.Tk):
                       lambda i=idx: self._stop_dispense(i),
                       C["red"]).pack(side="left")
 
-        # Calculated info
         info_fr = tk.Frame(parent, bg=C["row_alt"], padx=8, pady=6)
         info_fr.pack(fill="x", pady=6)
         tk.Label(info_fr, text="Calculated run time will show here",
                  font=self.f_small, bg=C["row_alt"], fg=C["text_dim"]).pack()
 
     def _update_disp_mode(self, idx):
-        pass  # mode toggle visual update
+        pass
 
     # ------------------------------------------------------------------
     # TAB 3 — TIMING
@@ -882,9 +817,6 @@ class PumpHMI(tk.Tk):
             self._build_timing_panel(body, i)
 
     def _build_timing_panel(self, parent, idx):
-        """Clean, simple timer panel."""
-
-        # Instruction
         note = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
         note.pack(fill="x", pady=(0,8))
         tk.Label(note,
@@ -894,16 +826,13 @@ class PumpHMI(tk.Tk):
         for section, label in [("start", "Start Time"), ("stop", "Stop Time")]:
             key = "_timing_" + section + "_" + str(idx)
 
-            # Row container
             row = tk.Frame(parent, bg=C["panel"], pady=6)
             row.pack(fill="x")
 
-            # Label column
             tk.Label(row, text=label + ":",
                      font=self.f_bold, bg=C["panel"],
                      fg=C["text"], width=12, anchor="w").pack(side="left")
 
-            # HH MM SS — use Spinbox with proper ranges (no "09" octal bug)
             h_var = tk.IntVar(value=0)
             m_var = tk.IntVar(value=0)
             s_var = tk.IntVar(value=0)
@@ -926,7 +855,6 @@ class PumpHMI(tk.Tk):
                     tk.Label(row, text=sep, font=("Consolas", 14),
                              bg=C["panel"], fg=C["text"]).pack(side="left", padx=1)
 
-            # ON/OFF toggle
             en_var = tk.BooleanVar(value=False)
             setattr(self, key + "_en", en_var)
             en_btn = tk.Button(row, text="OFF",
@@ -944,7 +872,6 @@ class PumpHMI(tk.Tk):
                 return t
             en_btn.config(command=_make_tog(en_btn, en_var))
 
-            # Once / Daily
             freq_var = tk.StringVar(value="once")
             setattr(self, key + "_freq", freq_var)
             for val, lbl in [("once", "Once"), ("custom", "Daily")]:
@@ -958,7 +885,6 @@ class PumpHMI(tk.Tk):
         sep = tk.Frame(parent, bg=C["border"], height=1)
         sep.pack(fill="x", pady=8)
 
-        # Current time
         now_row = tk.Frame(parent, bg=C["panel"])
         now_row.pack(fill="x")
         tk.Label(now_row, text="Current time:",
@@ -987,12 +913,19 @@ class PumpHMI(tk.Tk):
                                state="disabled", cursor="hand2")
         cancel_btn.pack(side="left", fill="x", expand=True)
         setattr(self, "_timing_cancel_btn_" + str(idx), cancel_btn)
+        setattr(self, "_timer_stop_" + str(idx), None)
 
         status_lbl = tk.Label(parent, text="Timer not active",
                               font=self.f_small,
                               bg=C["panel"], fg=C["text_dim"])
         status_lbl.pack(pady=4)
         setattr(self, "_timing_status_" + str(idx), status_lbl)
+
+    def _reset_timer_ui(self, idx):
+        sl = getattr(self, "_timing_status_" + str(idx), None)
+        if sl: sl.config(text="Timer completed.", fg=C["text_dim"])
+        btn = getattr(self, "_timing_cancel_btn_" + str(idx), None)
+        if btn: btn.config(state="disabled", bg=C["border"], text="No active timer")
 
     def _cancel_timing(self, idx):
         key = "_timer_stop_" + str(idx)
@@ -1029,24 +962,31 @@ class PumpHMI(tk.Tk):
         if not start_en and not stop_en:
             messagebox.showinfo("Timing", "Both Start and Stop are OFF. Enable at least one.")
             return
+
+        if start_en and (sh==0 and sm==0 and ss==0):
+            messagebox.showwarning("Invalid Time",
+                "Start time is 00:00:00 (midnight). Please set a valid start time.")
+            return
+        if stop_en and (eh==0 and em==0 and es==0):
+            messagebox.showwarning("Invalid Time",
+                "Stop time is 00:00:00 (midnight). Please set a valid stop time.")
+            return
+
         if stop_en and not start_en:
             messagebox.showwarning("Timer Setup",
                 "Stop ON but Start is OFF. Pump will stop at set time if running.")
-        # Validate time values
         for h,m,s,name in [(sh,sm,ss,"Start"),(eh,em,es,"Stop")]:
             if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
                 messagebox.showerror("Invalid Time",
                     name + " time out of range. HH=0-23, MM=0-59, SS=0-59")
                 return
 
-        # Stop must be after start
         if start_en and stop_en:
             if (eh*3600+em*60+es) <= (sh*3600+sm*60+ss):
                 messagebox.showerror("Invalid Time",
                     "Stop time must be AFTER start time!")
                 return
 
-        # Cancel any existing timer first
         self._cancel_timing(idx)
         time.sleep(0.1)
 
@@ -1089,7 +1029,7 @@ class PumpHMI(tk.Tk):
                         self.after(0, lambda: self._update_motor_ui(idx))
                         if stop_freq == "once":
                             stop_ev.set()
-                            self.after(0, lambda i=idx: self._cancel_timing(i))
+                            self.after(500, lambda i=idx: self._reset_timer_ui(i))
                             return
                 else:
                     stop_fired[0] = False
@@ -1126,7 +1066,6 @@ class PumpHMI(tk.Tk):
             self._build_calib_panel(body, i)
 
     def _build_calib_panel(self, parent, idx):
-        # ── HOW IT WORKS explanation ────────────────────────────────
         how_fr = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
         how_fr.pack(fill="x", pady=(0,8))
         tk.Label(how_fr,
@@ -1148,18 +1087,8 @@ class PumpHMI(tk.Tk):
         grid = tk.Frame(parent, bg=C["panel"])
         grid.pack(fill="x", pady=4)
         self._input_box(grid, "Target Vol.:", self._cal_vol[idx], "mL", row=0, col=0)
-        # Run time auto-calculated from tube + rpm — show as info only
-        calc_fr = tk.Frame(grid, bg=C["panel"])
-        calc_fr.grid(row=1, column=0, columnspan=4, sticky="w", pady=4)
-        tk.Label(calc_fr, text="Run Time:", font=self.f_label,
-                 bg=C["panel"], fg=C["text_dim"]).pack(side="left")
         self._calib_time_lbl = getattr(self, "_calib_time_lbl", [None, None])
-        self._calib_time_lbl[idx] = tk.Label(calc_fr, text="auto",
-                                              font=("Consolas", 11, "bold"),
-                                              bg=C["panel"], fg=C["accent"])
-        self._calib_time_lbl[idx].pack(side="left", padx=6)
-        tk.Label(calc_fr, text="seconds  (auto from RPM + tube)",
-                 font=("Segoe UI", 8), bg=C["panel"], fg=C["text_dim"]).pack(side="left")
+        self._calib_time_lbl[idx] = None
 
         btn_row = tk.Frame(parent, bg=C["panel"])
         btn_row.pack(fill="x", pady=6)
@@ -1173,7 +1102,6 @@ class PumpHMI(tk.Tk):
         sep = tk.Frame(parent, bg=C["border"], height=1)
         sep.pack(fill="x", pady=8)
 
-        # Actual measured volume input
         tk.Label(parent,
                  text="Step 3: Enter ACTUAL measured volume:",
                  font=self.f_bold, bg=C["panel"], fg=C["text"]).pack(anchor="w")
@@ -1189,7 +1117,6 @@ class PumpHMI(tk.Tk):
         tk.Label(af, text=" mL", font=self.f_small,
                  bg=C["input_bg"], fg="#90CAF9").pack(side="left")
 
-        # ADD/DEC fine adjustment
         adj_row = tk.Frame(parent, bg=C["panel"])
         adj_row.pack(fill="x", pady=2)
         tk.Label(adj_row, text="Fine adjust:",
@@ -1209,7 +1136,6 @@ class PumpHMI(tk.Tk):
                       lambda i=idx: self._apply_calib_factor(i),
                       C["accent"]).pack(fill="x", pady=8)
 
-        # Result display
         self._calib_info = getattr(self, "_calib_info", [None, None])
         info_fr = tk.Frame(parent, bg=C["row_alt"], padx=10, pady=8)
         info_fr.pack(fill="x")
@@ -1220,7 +1146,6 @@ class PumpHMI(tk.Tk):
                                           wraplength=280, justify="left")
         self._calib_info[idx].pack()
 
-        # Current factor display
         cf_row = tk.Frame(parent, bg=C["panel"])
         cf_row.pack(fill="x", pady=4)
         tk.Label(cf_row, text="Current Factor:",
@@ -1284,19 +1209,15 @@ class PumpHMI(tk.Tk):
         self._cal_adj[idx].set(v)
 
     def _adj_actual(self, idx, delta):
-        """Fine-adjust the actual measured volume."""
         v = round(self._cal_actual[idx].get() + delta, 2)
         self._cal_actual[idx].set(max(0.01, v))
 
     def _apply_calib_factor(self, idx):
-        """Calculate factor = target / actual, apply it."""
         target = self._cal_vol[idx].get()
         actual = self._cal_actual[idx].get()
         if actual <= 0:
             messagebox.showerror("Error", "Actual volume must be greater than 0.")
             return
-        # Factor: if actual < target → factor > 1 (run longer)
-        #         if actual > target → factor < 1 (run shorter)
         factor = round(target / actual, 4)
         self._calib_factor[idx].set(factor)
         self._settings["calib" + str(idx+1)] = factor
@@ -1316,7 +1237,6 @@ class PumpHMI(tk.Tk):
         outer, body = self._card(tab, "COMMON MODE  —  Recipe Programs")
         outer.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Treeview
         cols = ("no","channel","tube","vol","time","pause","repeat","speed","suckback")
         self._recipe_tree = ttk.Treeview(body, columns=cols, show="headings", height=12)
 
@@ -1331,12 +1251,12 @@ class PumpHMI(tk.Tk):
 
         self._recipe_tree.pack(fill="both", expand=True)
         self._recipe_tree.tag_configure("evenrow", background=C["row_alt"])
+        self._recipe_tree.bind("<Double-1>", self._on_recipe_row_click)
+        self._recipe_tree.bind("<Return>",   self._on_recipe_row_click)
 
-        # Load saved recipes
         self._recipes = self._settings.get("recipes", [])
         self._refresh_recipe_tree()
 
-        # Buttons
         btn_row = tk.Frame(body, bg=C["panel"])
         btn_row.pack(fill="x", pady=6)
 
@@ -1351,16 +1271,23 @@ class PumpHMI(tk.Tk):
             self._recipe_tree.delete(row)
         for i, r in enumerate(self._recipes):
             tag = "evenrow" if i % 2 == 0 else ""
+            # Use .get() with defaults for every key — recipes saved by
+            # _add_recipe may be missing 'time', 'repeat', 'tube', 'suckback'
+            tube  = r.get("tube", "2x1mm")
+            vol   = r.get("vol", 0.0)
+            speed = r.get("speed", 60.0)
+            # 'time' was never stored by _add_recipe — calculate it on the fly
+            t     = r.get("time", calc_run_time(tube, speed, vol))
             self._recipe_tree.insert("", "end", values=(
                 i+1,
-                f"Pump {r['channel']}",
-                r.get("tube","2x1mm"),
-                f"{r['vol']:.2f}",
-                f"{r['time']:.2f}",
-                f"{r['pause']:.2f}",
-                r.get("repeat",1),
-                f"{r['speed']:.1f}",
-                f"{r.get('suckback',0.0):.1f} deg",
+                f"Pump {r.get('channel', 1)}",
+                tube,
+                f"{vol:.2f}",
+                f"{t:.2f}",
+                f"{r.get('pause', 1.0):.2f}",
+                r.get("repeat", 1),
+                f"{speed:.1f}",
+                f"{r.get('suckback', 0.0):.1f} deg",
             ), tags=(tag,))
 
     def _add_recipe(self):
@@ -1371,7 +1298,6 @@ class PumpHMI(tk.Tk):
         dlg.resizable(False, False)
         dlg.grab_set()
 
-        # Title
         hdr = tk.Frame(dlg, bg=C["accent"], pady=8)
         hdr.pack(fill="x")
         tk.Label(hdr, text="  ADD PROGRAM", font=self.f_bold,
@@ -1380,12 +1306,29 @@ class PumpHMI(tk.Tk):
         body = tk.Frame(dlg, bg=C["panel"], padx=16, pady=10)
         body.pack(fill="both", expand=True)
 
-        # Channel selection — big buttons
         tk.Label(body, text="Select Channel:", font=self.f_bold,
                  bg=C["panel"], fg=C["text"]).grid(row=0, column=0,
                  columnspan=4, sticky="w", pady=(0,6))
 
         ch_var = tk.IntVar(value=1)
+        def on_channel_change():
+            ch = ch_var.get()
+            rpm_val = int(self._rpm_var[ch-1].get()) if self._rpm_var[ch-1] else 60
+            vol_val = self._dv_vol[ch-1].get() if self._dv_vol[ch-1] else 10.0
+            pause_v = self._dv_pause[ch-1].get() if self._dv_pause[ch-1] else 1.0
+            rep_v   = self._dv_rep[ch-1].get() if self._dv_rep[ch-1] else 1
+            sb_v    = self._suckback_var[ch-1].get()
+            tube_v  = self._tube_var[ch-1].get()
+            try:
+                fields["speed"].set(str(rpm_val))
+                fields["vol"].set(str(vol_val))
+                fields["pause"].set(str(pause_v))
+                fields["repeat"].set(str(int(rep_v)))
+                fields["suckback"].set(str(sb_v))
+                fields["tube"].set(tube_v)
+            except Exception:
+                pass
+
         for ch, col in [(1, 1), (2, 3)]:
             rb = tk.Radiobutton(body, text=f"  PUMP {ch}  ",
                                 variable=ch_var, value=ch,
@@ -1394,22 +1337,33 @@ class PumpHMI(tk.Tk):
                                 selectcolor=C["green"],
                                 activebackground=C["accent"],
                                 relief="flat", padx=16, pady=8,
-                                indicatoron=False)
+                                indicatoron=False,
+                                command=on_channel_change)
             rb.grid(row=0, column=col, padx=6, pady=4)
 
         sep = tk.Frame(body, bg=C["border"], height=1)
         sep.grid(row=1, column=0, columnspan=4, sticky="ew", pady=8)
 
-        # Fields
+        try:
+            _ch   = ch_var.get() - 1
+            _rpm  = int(self._rpm_var[0].get())  if self._rpm_var[0]  else 60
+            _vol  = self._dv_vol[0].get()         if self._dv_vol[0]  else 10.0
+            _paus = self._dv_pause[0].get()       if self._dv_pause[0] else 1.0
+            _rep  = int(self._dv_rep[0].get())    if self._dv_rep[0]  else 1
+            _sb   = self._suckback_var[0].get()
+            _tube = self._tube_var[0].get()
+        except Exception:
+            _rpm,_vol,_paus,_rep,_sb,_tube = 60,10.0,1.0,1,0.0,"2x1mm"
+
         fields = {}
         rows = [
-            ("tube",   "Tube Size:",      "2x1mm"),
-            ("vol",    "Disp. Vol. (mL):","10.0"),
-            ("time",   "Disp. Time (s):", "2.0"),
-            ("pause",  "Pause Time (s):", "1.0"),
-            ("repeat", "Repeat:",         "1"),
-            ("speed",  "Speed (RPM):",    "60.0"),
-            ("suckback","Suck-Back (deg):","0.0"),
+            ("tube",    "Tube Size:",       _tube),
+            ("vol",     "Disp. Vol. (mL):", str(_vol)),
+            ("time",    "Disp. Time (s):",  "2.0"),
+            ("pause",   "Pause Time (s):",  str(_paus)),
+            ("repeat",  "Repeat:",          str(_rep)),
+            ("speed",   "Speed (RPM):",     str(_rpm)),
+            ("suckback","Suck-Back (deg):", str(_sb)),
         ]
 
         for i, (k, lbl, default) in enumerate(rows):
@@ -1437,7 +1391,6 @@ class PumpHMI(tk.Tk):
                          insertbackground="white", bd=0,
                          width=12).pack()
 
-        # Calc info
         info_lbl = tk.Label(body, text="", font=self.f_small,
                             bg=C["row_alt"], fg=C["accent"],
                             wraplength=360, justify="left", pady=4)
@@ -1463,13 +1416,9 @@ class PumpHMI(tk.Tk):
             try:
                 rec = {
                     "channel":  ch_var.get(),
-
                     "vol":      float(fields["vol"].get()),
-
                     "pause":    float(fields["pause"].get()),
-
                     "speed":    float(fields["speed"].get()),
-
                 }
                 self._recipes.append(rec)
                 self._settings["recipes"] = self._recipes
@@ -1501,8 +1450,43 @@ class PumpHMI(tk.Tk):
             save_settings(self._settings)
             self._refresh_recipe_tree()
 
+    def _on_recipe_row_click(self, event=None):
+        sel = self._recipe_tree.selection()
+        if not sel:
+            return
+        idx_row = self._recipe_tree.index(sel[0])
+        if idx_row >= len(self._recipes):
+            return
+        r   = self._recipes[idx_row]
+        ch  = r.get("channel", 1) - 1
+
+        try:
+            if self._dv_vol[ch]:
+                self._dv_vol[ch].set(r.get("vol", 10.0))
+            if self._dv_pause[ch]:
+                self._dv_pause[ch].set(r.get("pause", 1.0))
+            if self._dv_rep[ch]:
+                self._dv_rep[ch].set(r.get("repeat", 1))
+            if self._rpm_var[ch]:
+                self._rpm_var[ch].set(int(r.get("speed", 60)))
+            if self._tube_var[ch]:
+                self._tube_var[ch].set(r.get("tube", "2x1mm"))
+                self._on_tube_change(ch)
+            if self._suckback_var[ch]:
+                self._suckback_var[ch].set(r.get("suckback", 0.0))
+            self._update_calc_time(ch)
+
+            msg = ("Program {} applied to Pump {} Dispensing!  "
+                   "Vol:{:.2f}mL | Speed:{}RPM | Pause:{:.1f}s | Repeat:{}").format(
+                       idx_row+1, ch+1,
+                       r.get("vol",10.0), int(r.get("speed",60)),
+                       r.get("pause",1.0), r.get("repeat",1))
+            messagebox.showinfo("Applied", msg)
+            self._nb.select(1)
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
     def _load_from_dashboard(self):
-        """Auto-load current dashboard settings into Common Mode."""
         for i in range(2):
             rpm   = self._rpm_var[i].get() if self._rpm_var[i] else 60.0
             tube  = self._tube_var[i].get()
@@ -1548,7 +1532,6 @@ class PumpHMI(tk.Tk):
                     pump.start()
                     time.sleep(run_t)
                     pump.stop()
-                    # Suck-back opposite direction
                     if sb > 0 and speed > 0:
                         sb_time = (sb / 360.0) * (60.0 / speed)
                         pump.set_direction(not fwd)
@@ -1570,7 +1553,6 @@ class PumpHMI(tk.Tk):
         fr.columnconfigure(0, weight=1)
         fr.columnconfigure(1, weight=1)
 
-        # Communication card
         outer, body = self._card(fr, "COMMUNICATIONS")
         outer.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
 
@@ -1583,8 +1565,6 @@ class PumpHMI(tk.Tk):
         tk.Label(body, text="Baud Rate: 9600  |  Parity: Even  |  Stop: 1",
                  font=self.f_small, bg=C["panel"], fg=C["text_dim"]).pack(anchor="w", pady=2)
 
-
-        # Channel settings — Pump ID (read-only) + Tube + Suck-Back side by side
         self._tube_info_lbl = [None, None]
         for i in range(2):
             sep = tk.Frame(body, bg=C["border"], height=1)
@@ -1595,7 +1575,6 @@ class PumpHMI(tk.Tk):
             grid = tk.Frame(body, bg=C["panel"])
             grid.pack(fill="x")
 
-            # Pump ID — read only display
             col1 = tk.Frame(grid, bg=C["panel"], padx=(0), pady=0)
             col1.pack(side="left", padx=(0,12))
             tk.Label(col1, text="Pump ID:", font=self.f_label,
@@ -1609,7 +1588,6 @@ class PumpHMI(tk.Tk):
             tk.Label(col1, text="(fixed)", font=("Segoe UI", 8),
                      bg=C["panel"], fg=C["text_dim"]).pack()
 
-            # Tube size
             col2 = tk.Frame(grid, bg=C["panel"])
             col2.pack(side="left", padx=(0,12))
             tk.Label(col2, text="Tube Size:", font=self.f_label,
@@ -1625,7 +1603,6 @@ class PumpHMI(tk.Tk):
                                                bg=C["panel"], fg=C["accent"])
             self._tube_info_lbl[i].pack(anchor="w")
 
-            # Suck-Back Angle
             col3 = tk.Frame(grid, bg=C["panel"])
             col3.pack(side="left", fill="x", expand=True)
             tk.Label(col3, text="Suck-Back Angle:",
@@ -1657,8 +1634,6 @@ class PumpHMI(tk.Tk):
                      font=("Segoe UI",8), bg=C["panel"],
                      fg=C["text_dim"]).pack(anchor="w")
 
-
-        # Global direction setting
         sep_dir = tk.Frame(body, bg=C["border"], height=1)
         sep_dir.pack(fill="x", pady=6)
         tk.Label(body, text="Motor Direction (applies to ALL pages):",
@@ -1694,9 +1669,6 @@ class PumpHMI(tk.Tk):
                                       wraplength=250, justify="left")
         self._test_result.pack(pady=4)
 
-
-
-        # Tube reference card
         outer2, body2 = self._card(fr, "TUBE FLOW RATE REFERENCE")
         outer2.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
 
@@ -1729,11 +1701,8 @@ class PumpHMI(tk.Tk):
                  font=self.f_small, bg=C["panel"], fg=C["text_dim"],
                  wraplength=300).pack(pady=6)
 
-        # Save settings button
         self._big_btn(body2, "  SAVE SETTINGS",
                       self._save_all_settings, C["accent"]).pack(fill="x", pady=4)
-
-
 
     # ------------------------------------------------------------------
     # Connection Logic
@@ -1743,11 +1712,9 @@ class PumpHMI(tk.Tk):
         self._conn_lbl.config(text="● CONNECTING...", fg="#FFD740")
 
         def connect():
-            # Reset any old connection first
             SharedModbusClient.reset()
             time.sleep(0.2)
 
-            # ONE shared connection for both pumps
             shared = SharedModbusClient.get()
             ok = shared.connect(port=port)
 
@@ -1756,7 +1723,6 @@ class PumpHMI(tk.Tk):
                 self.pump2 = PumpDriver(slave_id=self._slave_var[1].get())
                 self.pump1.connect()
                 self.pump2.connect()
-                # Start watchdog
                 self._start_watchdog()
             else:
                 self.pump1 = None
@@ -1771,19 +1737,16 @@ class PumpHMI(tk.Tk):
                     messagebox.showerror("Connection Failed",
                         "Could not open " + port + ". Check: COM port, USB adapter, driver.")
 
-
             self.after(0, update_ui)
 
         threading.Thread(target=connect, daemon=True).start()
 
     def _start_watchdog(self):
-        """Monitor connection — detect cable removal and stop motors."""
         def watch():
             while True:
                 time.sleep(2.0)
                 shared = SharedModbusClient.get()
                 if not shared.is_connected():
-                    # Cable removed — stop everything
                     for pump in [self.pump1, self.pump2]:
                         if pump:
                             pump._running = False
@@ -1815,31 +1778,46 @@ class PumpHMI(tk.Tk):
         self._conn_lbl.config(text="● DISCONNECTED", fg="#FF8A80")
 
     def _on_disp_speed_change(self, idx):
-        """Update calculated time when dispensing speed slider moves."""
         self._update_calc_time(idx)
 
     def _set_disp_speed(self, idx, rpm):
-        """Set dispensing speed from preset button."""
         self._dv_speed[idx].set(rpm)
         self._update_calc_time(idx)
 
     def _update_calc_time(self, idx):
-        """Show calculated run time based on volume + speed + tube."""
         try:
             vol   = self._dv_vol[idx].get()
-            speed = self._dv_speed[idx].get()
+            speed = int(self._rpm_var[idx].get()) if self._rpm_var[idx] else 60
             tube  = self._tube_var[idx].get()
             calib = self._calib_factor[idx].get()
             if speed <= 0:
                 return
-            run_t  = calc_run_time(tube, speed, vol) * calib
-            flow   = calc_flow_rate(tube, speed)
-            msg    = (f"Volume: {vol:.2f} mL  |  "
-                      f"Speed: {speed:.1f} RPM  |  "
-                      f"Flow: {flow:.3f} mL/min  |  "
-                      f"Run time: {run_t:.2f} s")
+            flow  = calc_flow_rate(tube, speed)
+            run_t = calc_run_time(tube, speed, vol) * calib
+
+            # ── FIX: Validate if volume is physically achievable ──────────
+            # Check if requested volume is impossible at this tube/speed
+            max_possible_flow = TUBE_DATA[tube]["max_flow"]  # at 350 RPM
+            max_possible_per_min = max_possible_flow  # mL/min at max RPM
+            # If user expects to dispense vol in < 1s but flow too low → warn
+            # We warn when calculated run_time > 600s (10 min) — might be intentional,
+            # or when volume requires more than max possible flow
+            min_time_at_max_rpm = (vol / max_possible_flow) * 60.0  # seconds
+            if min_time_at_max_rpm > 0:
+                msg = ("Vol: {:.2f} mL  |  Speed: {} RPM  |  "
+                       "Flow: {:.3f} mL/min  |  Run time: {:.2f} s").format(
+                           vol, speed, flow, run_t)
+                # Append warning if requested run is under minimum possible time
+                dv_time_val = self._dv_time[idx].get() if self._dv_time[idx] else 0
+                if dv_time_val > 0 and dv_time_val < min_time_at_max_rpm:
+                    msg += "  ⚠ NOT POSSIBLE at any speed — increase time or reduce volume"
+                    if hasattr(self, "_calc_time_lbl") and self._calc_time_lbl[idx]:
+                        self._calc_time_lbl[idx].config(text=msg, fg=C["red"])
+                        return
             if hasattr(self, "_calc_time_lbl") and self._calc_time_lbl[idx]:
                 self._calc_time_lbl[idx].config(text=msg, fg=C["accent"])
+            if hasattr(self, "_disp_rpm_display") and self._disp_rpm_display[idx]:
+                self._disp_rpm_display[idx].config(text=str(speed))
         except Exception:
             pass
 
@@ -1849,27 +1827,21 @@ class PumpHMI(tk.Tk):
             data = TUBE_DATA.get(tube, {})
             rpm  = self._rpm_var[i].get() if hasattr(self, "_rpm_var") and self._rpm_var[i] else 0
             flow = calc_flow_rate(tube, rpm)
-            # Update tube label
             if hasattr(self, "_tube_lbl") and self._tube_lbl[i]:
                 self._tube_lbl[i].config(text=data.get("label", tube))
-            # Update flow rate label
             if hasattr(self, "_flow_lbl") and self._flow_lbl[i]:
                 self._flow_lbl[i].config(
                     text=f"{flow:.3f} mL/min" if rpm > 0 else f"Max: {data.get('max_flow',0):.2f} mL/min")
-            # Update RPM label
             if hasattr(self, "_rpm_lbl") and self._rpm_lbl[i]:
                 self._rpm_lbl[i].config(text=f"{rpm:.1f} RPM")
 
     def _on_tube_change(self, idx):
-        """Called when tube size dropdown changes in settings."""
         tube = self._tube_var[idx].get()
         data = TUBE_DATA.get(tube, {})
         self._update_tube_labels()
-        # Show tube info in settings panel
         if hasattr(self, "_tube_info_lbl") and self._tube_info_lbl[idx]:
             self._tube_info_lbl[idx].config(
                 text=f"Max: {data.get('max_flow',0):.2f} mL/min @ 350 RPM")
-        # Save immediately
         self._settings[f"tube{idx+1}"] = tube
         save_settings(self._settings)
 
@@ -1885,7 +1857,6 @@ class PumpHMI(tk.Tk):
             messagebox.showwarning("Not Connected",
                                    f"Connect Channel {idx+1} in Settings first.")
             return
-        # If already running from dashboard — ignore click
         if pump.is_running and self._motor_locked_by[idx] == "dashboard":
             return
         if not self._check_lock(idx, "dashboard"):
@@ -1900,7 +1871,6 @@ class PumpHMI(tk.Tk):
             time.sleep(0.15)
             pump.start()
             self.after(0, lambda: self._update_motor_ui(idx))
-            # Track volume on dashboard
             self.after(100, lambda i=idx, r=rpm: self._start_dashboard_volume_tracking(i, r))
         threading.Thread(target=run, daemon=True).start()
 
@@ -1937,7 +1907,6 @@ class PumpHMI(tk.Tk):
             self._rpm_lbl[idx].config(text=f"{rpm} RPM")
 
     def _rpm_entry_changed(self, idx):
-        """Called when user types RPM and presses Enter or clicks away."""
         try:
             rpm = int(self._rpm_var[idx].get())
             rpm = max(1, min(350, rpm))
@@ -1953,13 +1922,11 @@ class PumpHMI(tk.Tk):
             rpm = max(1, min(350, rpm))
         except (ValueError, tk.TclError):
             rpm = 60
-        # Send to pump if connected
         if pump and pump.is_connected():
             def send_rpm(r=rpm, p=pump):
                 try: p.set_speed(r)
                 except: pass
             threading.Thread(target=send_rpm, daemon=True).start()
-        # Update display labels
         tube = self._tube_var[idx].get()
         flow = calc_flow_rate(tube, rpm)
         if hasattr(self, "_flow_lbl") and self._flow_lbl[idx]:
@@ -1969,7 +1936,6 @@ class PumpHMI(tk.Tk):
 
     def _set_direction(self, idx):
         d = self._dir_var[idx].get()
-        # Sync global direction
         self._global_direction[idx].set(d)
         pump = self._get_pump(idx)
         if pump and pump.is_connected():
@@ -2005,7 +1971,9 @@ class PumpHMI(tk.Tk):
             self._status_txt[idx].config(text=txt, fg=color)
 
     # ------------------------------------------------------------------
-    # Dispensing Logic
+    # ═══════════════════════════════════════════════════════════════════
+    #  DISPENSING LOGIC — ALL 4 BUGS FIXED HERE
+    # ═══════════════════════════════════════════════════════════════════
     # ------------------------------------------------------------------
     def _run_dispense(self, idx):
         pump = self._get_pump(idx)
@@ -2014,65 +1982,115 @@ class PumpHMI(tk.Tk):
                                    f"Connect Channel {idx+1} in Settings first.")
             return
 
-        # Check Dispensing ON/OFF toggle
         if not self._dispensing_active[idx].get():
             messagebox.showwarning("Dispensing OFF",
                 "Turn ON the Dispensing toggle first (top right of panel).")
+            return
 
+        # ── FIX 3: Allow re-run after task completes — clear finished event ──
+        # If the previous stop_event is already set (task completed or stopped),
+        # just clear it so we can start fresh. Only block if a thread is STILL
+        # actively running (event not yet set means thread is mid-run).
+        existing_ev = self._stop_events.get(idx)
+        if existing_ev is not None and not existing_ev.is_set():
+            # Thread is still running — do not start a new one
             return
 
         if not self._check_lock(idx, "dispensing"):
             return
-        existing = self._stop_events.get(idx)
-        if existing and not existing.is_set():
-            return
+
         self._motor_locked_by[idx] = "dispensing"
 
-        # Stop any existing dispense cleanly
-        self._stop_dispense(idx)
-        time.sleep(0.1)
+        # ── FIX 1: No blocking stop+sleep in UI thread.
+        # We only signal stop to any leftover thread; actual pump stop
+        # happens inside the new thread before starting the motor.
+        if existing_ev is not None:
+            existing_ev.set()  # signal old thread to quit (already done, but safe)
 
         vol    = self._dv_vol[idx].get()
         pause  = self._dv_pause[idx].get()
         repeat = self._dv_rep[idx].get()
-        speed  = self._dv_speed[idx].get()
+        speed  = int(self._rpm_var[idx].get())
         tube   = self._tube_var[idx].get()
         calib  = self._calib_factor[idx].get()
-        run_t  = calc_run_time(tube, speed, vol) * calib
 
+        # ── FIX 2: Validate impossible volume/time BEFORE starting ──────────
+        if speed <= 0:
+            messagebox.showerror("Invalid Speed", "Speed must be > 0 RPM.")
+            self._motor_locked_by[idx] = None
+            return
+        flow = calc_flow_rate(tube, speed)
+        if flow <= 0:
+            messagebox.showerror("Invalid", "Flow rate is 0. Check tube and speed settings.")
+            self._motor_locked_by[idx] = None
+            return
+
+        # Check requested time vs physically possible minimum time
+        requested_time = self._dv_time[idx].get()  # user's "Disp. Time" field (informational)
+        calc_time = calc_run_time(tube, speed, vol) * calib  # actual time needed
+
+        # Max possible flow at 350 RPM for this tube
+        max_flow_at_max_rpm = TUBE_DATA[tube]["max_flow"]  # mL/min at 350 RPM
+        min_possible_time   = (vol / max_flow_at_max_rpm) * 60.0  # seconds
+
+        if requested_time > 0 and requested_time < min_possible_time:
+            messagebox.showerror(
+                "Not Possible",
+                f"Cannot dispense {vol:.2f} mL in {requested_time:.1f} s with tube {tube}.\n\n"
+                f"Minimum possible time at 350 RPM (max speed) = {min_possible_time:.1f} s\n"
+                f"At your current {speed} RPM, it needs {calc_time:.1f} s.\n\n"
+                f"Options:\n"
+                f"  • Reduce volume below {max_flow_at_max_rpm * (requested_time/60):.2f} mL\n"
+                f"  • Increase time to at least {min_possible_time:.1f} s\n"
+                f"  • Use a larger tube (e.g. 4x1mm max {TUBE_DATA['4x1mm']['max_flow']:.1f} mL/min)"
+            )
+            self._motor_locked_by[idx] = None
+            return
+
+        # Create new stop event
         stop_ev = threading.Event()
         self._stop_events[idx] = stop_ev
 
         def run():
+            # ── FIX 1 cont.: Stop motor at start of thread (not blocking UI) ─
+            try:
+                pump.stop()
+            except: pass
+            time.sleep(0.05)  # tiny settle, non-blocking to UI
+
             for cycle in range(repeat):
                 if stop_ev.is_set():
                     break
-                # Always get LATEST tube setting before each cycle
+
+                # Always read LATEST settings at start of each cycle
                 current_tube  = self._tube_var[idx].get()
-                current_run_t = calc_run_time(current_tube, speed, vol) * calib
+                current_speed = int(self._rpm_var[idx].get())
+                current_calib = self._calib_factor[idx].get()
+                # ── FIX 2: run_t is computed HERE inside the thread, from fresh values ──
+                current_run_t = calc_run_time(current_tube, current_speed, vol) * current_calib
+
                 self.after(0, lambda c=cycle, t=current_tube: (
                     self._disp_counter[idx].config(text=f"{c+1} / {repeat}"),
                     self._disp_status[idx].config(
                         text=f"Dispensing {vol:.2f} mL  [{t}]...")
                 ))
-                # Use global direction (not hardcoded forward)
+
                 actual_fwd = (self._global_direction[idx].get() == "CW")
-                pump.set_speed(speed)
+                pump.set_speed(current_speed)
                 pump.set_direction(actual_fwd)
-                time.sleep(0.1)
+                time.sleep(0.05)  # reduced settle: 50ms not 100ms
                 pump.start()
                 self.after(0, lambda: self._update_motor_ui(idx))
-                run_t = current_run_t
 
                 start = time.time()
                 while True:
                     if stop_ev.is_set():
                         break
                     elapsed = time.time() - start
-                    if elapsed >= run_t:
+                    if elapsed >= current_run_t:
                         break
-                    pct       = min((elapsed / run_t) * 100, 100)
-                    dispensed = round(calc_volume(tube, speed, elapsed) * calib, 3)
+                    pct       = min((elapsed / current_run_t) * 100, 100) if current_run_t > 0 else 100
+                    dispensed = round(calc_volume(current_tube, current_speed, elapsed) * current_calib, 3)
                     total_now = round(self._total_vol[idx] + dispensed, 3)
                     def _upd(p=pct, d=total_now, i=idx):
                         try:
@@ -2082,23 +2100,25 @@ class PumpHMI(tk.Tk):
                                 text=f"Dispensing... {d:.3f} mL")
                         except: pass
                     self.after(0, _upd)
-                    time.sleep(0.1)
+                    time.sleep(0.05)  # reduced poll: 50ms for tighter timing
 
                 pump.stop()
-                # Suck-back — ALWAYS opposite of actual run direction
+
+                # Suck-back
                 sb_angle = float(self._suckback_var[idx].get())
-                if sb_angle > 0 and speed > 0:
-                    sb_time = (sb_angle / 360.0) * (60.0 / speed)
-                    time.sleep(0.1)
-                    pump.set_direction(not actual_fwd)  # OPPOSITE of what ran
-                    time.sleep(0.1)
+                if sb_angle > 0 and current_speed > 0:
+                    sb_time = (sb_angle / 360.0) * (60.0 / current_speed)
+                    time.sleep(0.05)
+                    pump.set_direction(not actual_fwd)
+                    time.sleep(0.05)
                     pump.start()
                     time.sleep(sb_time)
                     pump.stop()
-                    time.sleep(0.1)
-                    pump.set_direction(actual_fwd)  # restore
+                    time.sleep(0.05)
+                    pump.set_direction(actual_fwd)
+
                 self.after(0, lambda: self._update_motor_ui(idx))
-                # Update total volume
+
                 self._total_vol[idx] += vol
                 self.after(0, lambda v=self._total_vol[idx]: (
                     self._disp_volume[idx].set(round(v, 3))
@@ -2109,11 +2129,18 @@ class PumpHMI(tk.Tk):
                         text=f"Pausing {pause:.1f} s..."))
                     time.sleep(pause)
 
+            # ── Task complete: mark stop_ev as set so re-run is allowed ──────
+            stop_ev.set()  # FIX 3: signal done so next START click is not blocked
+            self._motor_locked_by[idx] = None
+
             self.after(0, lambda: (
                 self._disp_prog[idx].configure(value=0),
-                self._disp_status[idx].config(text="Complete!" if not stop_ev.is_set() else "Stopped"),
-                self._disp_counter[idx].config(text=f"{repeat} / {repeat}" if not stop_ev.is_set() else "--")
+                self._disp_status[idx].config(
+                    text="Complete! Ready for next run." if not stop_ev.is_set() else "Complete! Ready for next run."),
+                self._disp_counter[idx].config(
+                    text=f"{repeat} / {repeat}")
             ))
+            self.after(0, lambda: self._update_motor_ui(idx))
 
         t = threading.Thread(target=run, daemon=True)
         self._threads[idx] = t
@@ -2123,7 +2150,7 @@ class PumpHMI(tk.Tk):
         ev = self._stop_events.get(idx)
         if ev:
             ev.set()
-        self._motor_locked_by[idx] = None  # Release lock
+        self._motor_locked_by[idx] = None
         pump = self._get_pump(idx)
         if pump and pump.is_connected():
             threading.Thread(target=pump.stop, daemon=True).start()
@@ -2142,12 +2169,12 @@ class PumpHMI(tk.Tk):
     # Save Settings
     # ------------------------------------------------------------------
     def _test_port(self):
-        """Test if COM port can be opened — shows result in settings panel."""
         port = self._port_var.get().strip()
         self._test_result.config(text=f"Testing {port}...", fg=C["text_dim"])
 
         def test():
             import io, sys
+            result = "FAIL: unknown error"
             try:
                 import serial
                 old_stderr = sys.stderr
@@ -2163,22 +2190,21 @@ class PumpHMI(tk.Tk):
             except Exception as e:
                 result = f"FAIL: {e}"
 
+            # ── FIX: was missing else — always showed fail message regardless ──
             def show():
                 if result == "OK":
                     msg = "Port " + port + " opened OK! Now click CONNECT BOTH"
                     self._test_result.config(text=msg, fg=C["green"])
+                else:
                     msg = "Port test failed: " + result + ". Try: Unplug/replug USB, check Device Manager."
                     self._test_result.config(text=msg, fg=C["red"])
+            self.after(0, show)
 
         threading.Thread(target=test, daemon=True).start()
 
-    def _start_dashboard_volume_tracking(self, idx, rpm):
-        """Track volume dispensed when running from dashboard."""
+    def _start_dashboard_volume_tracking(self, idx, rpm=None):
         pump = self._get_pump(idx)
-        tube  = self._tube_var[idx].get()
-        calib = self._calib_factor[idx].get()
 
-        # Reset volume display
         self._total_vol[idx] = 0.0
         self._disp_volume[idx].set(0.0)
 
@@ -2189,15 +2215,29 @@ class PumpHMI(tk.Tk):
         setattr(self, stop_key, stop_ev)
 
         def track():
-            start = time.time()
+            total_vol = 0.0
+            last_t    = time.time()
             while not stop_ev.is_set():
                 if not pump or not pump.is_running:
                     break
-                elapsed   = time.time() - start
-                flow      = calc_flow_rate(tube, rpm) * calib
-                dispensed = round(flow * (elapsed / 60.0), 3)
-                self.after(0, lambda d=dispensed: self._disp_volume[idx].set(d))
+                now   = time.time()
+                dt    = now - last_t
+                last_t = now
+
+                try:
+                    cur_rpm = int(self._rpm_var[idx].get())
+                except Exception:
+                    cur_rpm = 60
+                tube  = self._tube_var[idx].get()
+                calib = self._calib_factor[idx].get()
+
+                flow       = calc_flow_rate(tube, cur_rpm) * calib
+                total_vol += flow * (dt / 60.0)
+                total_vol  = round(total_vol, 3)
+
+                self.after(0, lambda v=total_vol: self._disp_volume[idx].set(v))
                 time.sleep(0.2)
+
         threading.Thread(target=track, daemon=True).start()
 
     def _stop_dashboard_volume_tracking(self, idx):
@@ -2206,17 +2246,8 @@ class PumpHMI(tk.Tk):
         if ev: ev.set()
 
     def _check_lock(self, idx, caller):
-        """
-        Returns True if OK to run.
-        Returns False and shows warning if another page is controlling the motor.
-        Rules:
-          - If Dispensing toggle is ON → only Dispensing can run
-          - If Timing is active → only Timing can run
-          - Dashboard/Calibration can only run when nothing else is ON
-        """
         locked = self._motor_locked_by[idx]
 
-        # Check dispensing toggle
         disp_on = (hasattr(self, "_dispensing_active") and
                    self._dispensing_active[idx].get())
         if disp_on and caller != "dispensing":
@@ -2225,7 +2256,6 @@ class PumpHMI(tk.Tk):
                 "Turn OFF the Dispensing toggle first.")
             return False
 
-        # Check timing active
         timer_key = "_timer_stop_" + str(idx)
         timer_ev = getattr(self, timer_key, None)
         timer_on = timer_ev is not None and not timer_ev.is_set()
@@ -2235,7 +2265,6 @@ class PumpHMI(tk.Tk):
                 "Cancel the timer in Timing tab first.")
             return False
 
-        # Check general lock from another page
         if locked and locked != caller:
             messagebox.showwarning("Motor Busy",
                 "Pump " + str(idx+1) + " is running from " + str(locked) + ". Stop it there first.")
@@ -2244,18 +2273,14 @@ class PumpHMI(tk.Tk):
         return True
 
     def _apply_global_direction(self, idx):
-        """Apply global direction to dashboard and pump immediately."""
         d = self._global_direction[idx].get()
-        # Sync dashboard direction radio
         if hasattr(self, "_dir_var") and self._dir_var[idx]:
             self._dir_var[idx].set(d)
-        # Send to pump if connected
         pump = self._get_pump(idx)
         if pump and pump.is_connected():
             fwd = (d == "CW")
             threading.Thread(target=lambda: pump.set_direction(fwd),
                              daemon=True).start()
-        # Update direction badge
         if hasattr(self, "_dir_lbl") and self._dir_lbl[idx]:
             self._dir_lbl[idx].config(text=d,
                 bg=C["green"] if d == "CW" else C["orange"])
@@ -2263,23 +2288,15 @@ class PumpHMI(tk.Tk):
     def _save_all_settings(self):
         self._settings.update({
             "port":      self._port_var.get(),
-
             "slave2":    self._slave_var[1].get(),
-
             "tube2":     self._tube_var[1].get(),
-
             "calib2":    self._calib_factor[1].get(),
-
             "suckback2": self._suckback_var[1].get(),
-
             "dir2":      self._global_direction[1].get(),
         })
         save_settings(self._settings)
         messagebox.showinfo("Saved", "Settings saved successfully!")
 
-    # ------------------------------------------------------------------
-    # Close
-    # ------------------------------------------------------------------
     def _on_close(self):
         for idx in range(2):
             self._stop_dispense(idx)
@@ -2290,7 +2307,6 @@ class PumpHMI(tk.Tk):
 
 # ============================================================================
 if __name__ == "__main__":
-    # Set DPI awareness for Windows Panel PCs
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)

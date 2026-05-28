@@ -2,11 +2,64 @@
   "port": "COM9",
   "slave1": 1,
   "slave2": 2,
-  "tube1": "1x1mm",
+  "tube1": "4x1mm",
   "tube2": "4x1mm",
   "calib1": 1.0,
   "calib2": 1.0,
-  "recipes": [],
+  "recipes": [
+    {
+      "channel": 1,
+      "vol": 10.0,
+      "pause": 1.0,
+      "speed": 205.0
+    },
+    {
+      "channel": 1,
+      "vol": 10.0,
+      "pause": 1.0,
+      "speed": 205.0
+    },
+    {
+      "channel": 1,
+      "tube": "4x1mm",
+      "vol": 10.0,
+      "time": 14.07,
+      "pause": 1.0,
+      "repeat": 1,
+      "speed": 100,
+      "suckback": 0.0
+    },
+    {
+      "channel": 2,
+      "tube": "4x1mm",
+      "vol": 10.0,
+      "time": 23.45,
+      "pause": 1.0,
+      "repeat": 1,
+      "speed": 60,
+      "suckback": 360.0
+    },
+    {
+      "channel": 1,
+      "tube": "4x1mm",
+      "vol": 10.0,
+      "time": 14.07,
+      "pause": 1.0,
+      "repeat": 1,
+      "speed": 100,
+      "suckback": 0.0
+    },
+    {
+      "channel": 2,
+      "tube": "4x1mm",
+      "vol": 10.0,
+      "time": 23.45,
+      "pause": 1.0,
+      "repeat": 1,
+      "speed": 60,
+      "suckback": 360.0
+    }
+  ],
   "suckback1": 0.0,
   "suckback2": 360.0,
   "dir1": "CCW",
