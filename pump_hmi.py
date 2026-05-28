@@ -651,13 +651,13 @@ class PumpHMI(tk.Tk):
         self._dir_var = getattr(self, "_dir_var", [None, None])
         self._dir_var[idx] = tk.StringVar(value="CW")
 
-        tk.Radiobutton(dir_row, text="CW (Forward)",
+        tk.Radiobutton(dir_row, text="CW (Reverse)",
                        variable=self._dir_var[idx], value="CW",
                        command=lambda i=idx: self._set_direction(i),
                        bg=C["panel"], fg=C["text"],
                        selectcolor=C["bg"],
                        activebackground=C["panel"]).pack(side="left", padx=8)
-        tk.Radiobutton(dir_row, text="CCW (Reverse)",
+        tk.Radiobutton(dir_row, text="CCW (Forward)",
                        variable=self._dir_var[idx], value="CCW",
                        command=lambda i=idx: self._set_direction(i),
                        bg=C["panel"], fg=C["text"],
@@ -892,7 +892,7 @@ class PumpHMI(tk.Tk):
                  font=self.f_small, bg=C["row_alt"], fg=C["text_dim"]).pack(anchor="w")
 
         for section, label in [("start", "Start Time"), ("stop", "Stop Time")]:
-            key = f"_timing_{section}_{idx}"
+            key = "_timing_" + section + "_" + str(idx)
 
             # Row container
             row = tk.Frame(parent, bg=C["panel"], pady=6)
@@ -903,33 +903,32 @@ class PumpHMI(tk.Tk):
                      font=self.f_bold, bg=C["panel"],
                      fg=C["text"], width=12, anchor="w").pack(side="left")
 
-            # HH MM SS entries
+            # HH MM SS — use Spinbox with proper ranges (no "09" octal bug)
             h_var = tk.IntVar(value=0)
             m_var = tk.IntVar(value=0)
             s_var = tk.IntVar(value=0)
-            setattr(self, f"{key}_h", h_var)
-            setattr(self, f"{key}_m", m_var)
-            setattr(self, f"{key}_s", s_var)
+            setattr(self, key + "_h", h_var)
+            setattr(self, key + "_m", m_var)
+            setattr(self, key + "_s", s_var)
 
-            for var, tip, sep in [
-                (h_var, "HH", ":"),
-                (m_var, "MM", ":"),
-                (s_var, "SS", ""),
+            for var, tip, maxval, sep in [
+                (h_var, "HH", 23, ":"),
+                (m_var, "MM", 59, ":"),
+                (s_var, "SS", 59, ""),
             ]:
-                box = tk.Frame(row, bg=C["input_bg"], padx=4, pady=3)
-                box.pack(side="left", padx=1)
-                tk.Entry(box, textvariable=var,
-                         font=("Consolas", 14, "bold"),
-                         bg=C["input_bg"], fg="white",
-                         insertbackground="white",
-                         bd=0, width=3, justify="center").pack()
+                sp = ttk.Spinbox(row, from_=0, to=maxval,
+                                 textvariable=var,
+                                 font=("Consolas", 14, "bold"),
+                                 width=3, justify="center",
+                                 wrap=True)
+                sp.pack(side="left", padx=1)
                 if sep:
                     tk.Label(row, text=sep, font=("Consolas", 14),
-                             bg=C["panel"], fg=C["text"]).pack(side="left")
+                             bg=C["panel"], fg=C["text"]).pack(side="left", padx=1)
 
             # ON/OFF toggle
             en_var = tk.BooleanVar(value=False)
-            setattr(self, f"{key}_en", en_var)
+            setattr(self, key + "_en", en_var)
             en_btn = tk.Button(row, text="OFF",
                                font=self.f_bold,
                                bg=C["red"], fg="white",
@@ -947,7 +946,7 @@ class PumpHMI(tk.Tk):
 
             # Once / Daily
             freq_var = tk.StringVar(value="once")
-            setattr(self, f"{key}_freq", freq_var)
+            setattr(self, key + "_freq", freq_var)
             for val, lbl in [("once", "Once"), ("custom", "Daily")]:
                 tk.Radiobutton(row, text=lbl,
                                variable=freq_var, value=val,
@@ -1009,13 +1008,20 @@ class PumpHMI(tk.Tk):
         if btn: btn.config(state="disabled", bg=C["border"], text="No active timer")
 
     def _apply_timing(self, idx):
-        sh = getattr(self, "_timing_start_" + str(idx) + "_h").get()
-        sm = getattr(self, "_timing_start_" + str(idx) + "_m").get()
-        ss = getattr(self, "_timing_start_" + str(idx) + "_s").get()
+        def safe_get(attr):
+            try:
+                v = getattr(self, attr).get()
+                return int(str(v).lstrip("0") or "0")
+            except Exception:
+                return 0
+
+        sh = safe_get("_timing_start_" + str(idx) + "_h")
+        sm = safe_get("_timing_start_" + str(idx) + "_m")
+        ss = safe_get("_timing_start_" + str(idx) + "_s")
         start_en = getattr(self, "_timing_start_" + str(idx) + "_en").get()
-        eh = getattr(self, "_timing_stop_" + str(idx) + "_h").get()
-        em = getattr(self, "_timing_stop_" + str(idx) + "_m").get()
-        es = getattr(self, "_timing_stop_" + str(idx) + "_s").get()
+        eh = safe_get("_timing_stop_" + str(idx) + "_h")
+        em = safe_get("_timing_stop_" + str(idx) + "_m")
+        es = safe_get("_timing_stop_" + str(idx) + "_s")
         stop_en = getattr(self, "_timing_stop_" + str(idx) + "_en").get()
         start_freq = getattr(self, "_timing_start_" + str(idx) + "_freq").get()
         stop_freq  = getattr(self, "_timing_stop_"  + str(idx) + "_freq").get()
@@ -1023,7 +1029,9 @@ class PumpHMI(tk.Tk):
         if not start_en and not stop_en:
             messagebox.showinfo("Timing", "Both Start and Stop are OFF. Enable at least one.")
             return
-
+        if stop_en and not start_en:
+            messagebox.showwarning("Timer Setup",
+                "Stop ON but Start is OFF. Pump will stop at set time if running.")
         # Validate time values
         for h,m,s,name in [(sh,sm,ss,"Start"),(eh,em,es,"Stop")]:
             if not (0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59):
@@ -1661,7 +1669,7 @@ class PumpHMI(tk.Tk):
             tk.Label(dir_row, text=f"Pump {i+1}:",
                      font=self.f_label, bg=C["panel"],
                      fg=C["text_dim"], width=8, anchor="w").pack(side="left")
-            for val, lbl in [("CW", "CW (Forward)"), ("CCW", "CCW (Reverse)")]:
+            for val, lbl in [("CW", "CW (Reverse)"), ("CCW", "CCW (Forward)")]:
                 tk.Radiobutton(dir_row, text=lbl,
                                variable=self._global_direction[i], value=val,
                                font=self.f_label, bg=C["panel"], fg=C["text"],
@@ -1877,25 +1885,30 @@ class PumpHMI(tk.Tk):
             messagebox.showwarning("Not Connected",
                                    f"Connect Channel {idx+1} in Settings first.")
             return
+        # If already running from dashboard — ignore click
+        if pump.is_running and self._motor_locked_by[idx] == "dashboard":
+            return
         if not self._check_lock(idx, "dashboard"):
             return
         self._motor_locked_by[idx] = "dashboard"
         def run():
-            rpm = self._rpm_var[idx].get()
+            rpm = int(self._rpm_var[idx].get())
             fwd = (self._global_direction[idx].get() == "CW")
-            ok1 = pump.set_speed(rpm)
+            pump.set_speed(rpm)
             time.sleep(0.15)
-            ok2 = pump.set_direction(fwd)
+            pump.set_direction(fwd)
             time.sleep(0.15)
-            ok3 = pump.start()
+            pump.start()
             self.after(0, lambda: self._update_motor_ui(idx))
+            # Track volume on dashboard
+            self.after(100, lambda i=idx, r=rpm: self._start_dashboard_volume_tracking(i, r))
         threading.Thread(target=run, daemon=True).start()
 
     def _cmd_stop(self, idx):
         pump = self._get_pump(idx)
-        # Only release lock if dashboard owns it
         if self._motor_locked_by[idx] == "dashboard":
             self._motor_locked_by[idx] = None
+        self._stop_dashboard_volume_tracking(idx)
         def force_stop():
             if pump:
                 for _ in range(3):
@@ -2158,6 +2171,39 @@ class PumpHMI(tk.Tk):
                     self._test_result.config(text=msg, fg=C["red"])
 
         threading.Thread(target=test, daemon=True).start()
+
+    def _start_dashboard_volume_tracking(self, idx, rpm):
+        """Track volume dispensed when running from dashboard."""
+        pump = self._get_pump(idx)
+        tube  = self._tube_var[idx].get()
+        calib = self._calib_factor[idx].get()
+
+        # Reset volume display
+        self._total_vol[idx] = 0.0
+        self._disp_volume[idx].set(0.0)
+
+        stop_key = "_dash_vol_stop_" + str(idx)
+        ev = getattr(self, stop_key, None)
+        if ev: ev.set()
+        stop_ev = threading.Event()
+        setattr(self, stop_key, stop_ev)
+
+        def track():
+            start = time.time()
+            while not stop_ev.is_set():
+                if not pump or not pump.is_running:
+                    break
+                elapsed   = time.time() - start
+                flow      = calc_flow_rate(tube, rpm) * calib
+                dispensed = round(flow * (elapsed / 60.0), 3)
+                self.after(0, lambda d=dispensed: self._disp_volume[idx].set(d))
+                time.sleep(0.2)
+        threading.Thread(target=track, daemon=True).start()
+
+    def _stop_dashboard_volume_tracking(self, idx):
+        stop_key = "_dash_vol_stop_" + str(idx)
+        ev = getattr(self, stop_key, None)
+        if ev: ev.set()
 
     def _check_lock(self, idx, caller):
         """
