@@ -307,14 +307,152 @@ C = {
     "teal":     "#00838F",
 }
 
+# ============================================================================
+# SPLASH SCREEN
+# ============================================================================
+class SplashScreen(tk.Toplevel):
+    """Company splash screen shown while the app initialises."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.overrideredirect(True)   # no title bar or borders
+
+        # ── Dimensions ───────────────────────────────────────────────────
+        w, h = 480, 420   # taller to fit all content
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        x  = (sw - w) // 2
+        y  = (sh - h) // 2
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.configure(bg="#1565C0")
+        self.lift()
+        self.attributes("-topmost", True)
+
+        # ── Top accent strip ──────────────────────────────────────────────
+        tk.Frame(self, bg="#0D47A1", height=6).pack(fill="x")
+
+        # ── Logo (zoom 3× — smaller so bottom content fits) ──────────────
+        _LOGO_DATA = """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"""
+        logo_loaded = False
+        try:
+            _base = tk.PhotoImage(data=_LOGO_DATA)
+            self._logo = _base.zoom(3, 3)   # 42×42 → 126×126
+            tk.Label(self, image=self._logo,
+                     bg="#1565C0").pack(pady=(20, 0))
+            logo_loaded = True
+        except Exception:
+            pass
+
+        if not logo_loaded:
+            tk.Label(self, text="◉",
+                     font=("Segoe UI", 64),
+                     bg="#1565C0", fg="white").pack(pady=(28, 0))
+
+        # ── Company name ──────────────────────────────────────────────────
+        tk.Label(self, text="VISA PVT LTD",
+                 font=("Segoe UI", 30, "bold"),
+                 bg="#1565C0", fg="white").pack(pady=(10, 0))
+
+        # ── Sub-title ─────────────────────────────────────────────────────
+        tk.Label(self, text="Precision Pump Control System",
+                 font=("Segoe UI", 14),
+                 bg="#1565C0", fg="#90CAF9").pack(pady=(6, 0))
+
+        # ── Divider ───────────────────────────────────────────────────────
+        tk.Frame(self, bg="#1976D2", height=1).pack(fill="x", padx=40, pady=(12, 0))
+
+        # ── Loading bar — pack at bottom FIRST so it anchors there ─────────
+        self._bar_w = w
+        bar_track = tk.Frame(self, bg="#0D47A1", height=10)
+        bar_track.pack(fill="x", side="bottom")
+        self._bar = tk.Frame(bar_track, bg="#64FFDA", height=10, width=0)
+        self._bar.place(x=0, y=0, relheight=1)
+
+        # ── Loading text — above the bar ─────────────────────────────────
+        self._load_lbl = tk.Label(self, text="Loading...",
+                                  font=("Segoe UI", 10),
+                                  bg="#1565C0", fg="#64FFDA")
+        self._load_lbl.pack(side="bottom", pady=(0, 6))
+
+        # ── Copyright — above loading text ───────────────────────────────
+        tk.Label(self, text="© 1999  VISA PVT LTD  |  All rights reserved",
+                 font=("Segoe UI", 10, "bold"),
+                 bg="#1565C0", fg="white").pack(side="bottom", pady=(0, 4))
+
+        self._progress  = 0
+        self._after_job = None
+        self._animate()
+
+    def _animate(self):
+        """Animate the loading bar — 25 steps × 60ms = 1.5s total."""
+        try:
+            if self._progress <= 100:
+                bar_px = int(self._bar_w * self._progress / 100)
+                self._bar.place(x=0, y=0, width=bar_px, relheight=1)
+                dots = "." * (1 + (self._progress // 34) % 4)
+                self._load_lbl.config(text=f"Loading{dots}")
+                self._progress  += 4
+                self._after_job  = self.after(60, self._animate)
+        except Exception:
+            pass   # window destroyed — stop silently
+
+    def close(self):
+        # Cancel pending after() job BEFORE destroying — prevents the
+        # "invalid command name" error during Tk shutdown sequence
+        try:
+            if self._after_job:
+                self.after_cancel(self._after_job)
+                self._after_job = None
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+
 class PumpHMI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Shenchen Pump Control System")
-        self.geometry("1024x768")
-        self.minsize(900, 650)
+        self.title("VISA PVT LTD — Precision Pump Control")
         self.configure(bg=C["bg"])
         self.resizable(True, True)
+
+        # ── Detect screen size and scale accordingly ──────────────────────
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+
+        # Choose startup geometry based on screen size
+        if sw >= 1920:        # FHD / large monitor
+            self.geometry("1400x900")
+            self.minsize(1024, 700)
+            self._ui_scale = 1.25
+        elif sw >= 1280:      # HD / widescreen panel
+            self.geometry("1280x800")
+            self.minsize(900, 650)
+            self._ui_scale = 1.1
+        elif sw >= 1024:      # 1024x768 standard panel
+            self.geometry("1024x768")
+            self.minsize(900, 650)
+            self._ui_scale = 1.0
+        elif sw >= 800:       # 800x600 / small panel
+            self.geometry(f"{sw}x{sh}")
+            self.minsize(780, 520)
+            self._ui_scale = 0.85
+        else:                 # very small / embed
+            self.geometry(f"{sw}x{sh}")
+            self.minsize(640, 480)
+            self._ui_scale = 0.75
+
+        # Maximise on small touch panels for full-screen UX — cross-platform
+        if sw <= 1024 and sh <= 768:
+            try:
+                self.state("zoomed")          # Windows
+            except Exception:
+                try:
+                    self.attributes("-zoomed", True)   # Linux
+                except Exception:
+                    pass
 
         self.pump1 = None
         self.pump2 = None
@@ -358,15 +496,21 @@ class PumpHMI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_fonts(self):
-        self.f_title  = ("Segoe UI", 14, "bold")
-        self.f_head   = ("Segoe UI", 11, "bold")
-        self.f_label  = ("Segoe UI", 10)
-        self.f_bold   = ("Segoe UI", 10, "bold")
-        self.f_big    = ("Segoe UI", 28, "bold")
-        self.f_med    = ("Segoe UI", 16, "bold")
-        self.f_mono   = ("Consolas", 11)
-        self.f_small  = ("Segoe UI", 9)
-        self.f_btn    = ("Segoe UI", 11, "bold")
+        # Scale font sizes based on screen resolution
+        s = getattr(self, "_ui_scale", 1.0)
+        def fs(n):
+            """Scale font size — minimum 7pt to stay readable."""
+            return max(7, round(n * s))
+
+        self.f_title  = ("Segoe UI", fs(14), "bold")
+        self.f_head   = ("Segoe UI", fs(11), "bold")
+        self.f_label  = ("Segoe UI", fs(10))
+        self.f_bold   = ("Segoe UI", fs(10), "bold")
+        self.f_big    = ("Segoe UI", fs(28), "bold")
+        self.f_med    = ("Segoe UI", fs(16), "bold")
+        self.f_mono   = ("Consolas", fs(11))
+        self.f_small  = ("Segoe UI", fs(9))
+        self.f_btn    = ("Segoe UI", fs(11), "bold")
 
         # ── Global input validators — registered ONCE, reused everywhere ──────
         def _vf(s):   # positive float: digits + at most one decimal, no minus
@@ -386,15 +530,28 @@ class PumpHMI(tk.Tk):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
-        tk.Label(hdr, text="  SHENCHEN PUMP CONTROL SYSTEM",
+        # Company logo — embedded PNG base64, loaded with native tkinter PhotoImage
+        # No PIL/Pillow required. Logo is white on transparent bg — visible on dark header.
+        try:
+            _LOGO_DATA = """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"""
+            self._logo_photo = tk.PhotoImage(data=_LOGO_DATA)
+            tk.Label(hdr, image=self._logo_photo,
+                     bg=C["header"]).pack(side="left", padx=(10, 8))
+        except Exception:
+            pass   # Skip logo if loading fails — title still shows app name
+
+        tk.Frame(hdr, bg="#4a7fc1", width=1).pack(side="left", fill="y", pady=8)
+
+        tk.Label(hdr, text="  VISA PVT LTD",
                  font=self.f_title, bg=C["header"], fg=C["text_lt"]).pack(side="left", padx=10)
 
-        self._clock_lbl = tk.Label(hdr, text="", font=("Consolas", 13),
+        self._clock_lbl = tk.Label(hdr, text="",
+                                   font=("Consolas", max(9, round(13 * getattr(self, "_ui_scale", 1.0)))),
                                    bg=C["header"], fg="#90CAF9")
         self._clock_lbl.pack(side="right", padx=20)
 
         self._conn_lbl = tk.Label(hdr, text="● DISCONNECTED",
-                                  font=("Segoe UI", 10, "bold"),
+                                  font=("Segoe UI", max(8, round(10 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                   bg=C["header"], fg="#FF8A80")
         self._conn_lbl.pack(side="right", padx=10)
 
@@ -423,6 +580,43 @@ class PumpHMI(tk.Tk):
         self._build_tab_calibration()
         self._build_tab_common_mode()
         self._build_tab_settings()
+
+        # ── Single root-level mousewheel handler — smart scroll ───────────────
+        # Routes scroll to the correct canvas based on active tab.
+        # Skips Entry/Spinbox widgets so typing numbers isn't interrupted.
+        def _smart_scroll(event):
+            # Don't scroll if focus is on a text-input widget
+            w = self.focus_get()
+            if isinstance(w, (tk.Entry, ttk.Spinbox, ttk.Combobox)):
+                return
+            tab_idx = self._nb.index(self._nb.select())
+            canvas_map = {
+                0: getattr(self, "_dashboard_canvas",  None),
+                1: getattr(self, "_dispensing_canvas", None),
+            }
+            cv = canvas_map.get(tab_idx)
+            if cv:
+                # Windows uses event.delta; Linux uses Button-4/5
+                units = int(-1 * (event.delta / 120)) if event.delta else 0
+                if units:
+                    cv.yview_scroll(units, "units")
+
+        self.bind_all("<MouseWheel>", _smart_scroll)           # Windows
+        # Linux uses Button-4 (scroll up) and Button-5 (scroll down)
+        def _scroll_up(e):
+            cv = {0: getattr(self, "_dashboard_canvas", None),
+                  1: getattr(self, "_dispensing_canvas", None)}.get(
+                      self._nb.index(self._nb.select()))
+            if cv and not isinstance(self.focus_get(), (tk.Entry, ttk.Spinbox, ttk.Combobox)):
+                cv.yview_scroll(-1, "units")
+        def _scroll_down(e):
+            cv = {0: getattr(self, "_dashboard_canvas", None),
+                  1: getattr(self, "_dispensing_canvas", None)}.get(
+                      self._nb.index(self._nb.select()))
+            if cv and not isinstance(self.focus_get(), (tk.Entry, ttk.Spinbox, ttk.Combobox)):
+                cv.yview_scroll(1, "units")
+        self.bind_all("<Button-4>", _scroll_up)    # Linux scroll up
+        self.bind_all("<Button-5>", _scroll_down)  # Linux scroll down
 
     def _tab_frame(self, label):
         f = tk.Frame(self._nb, bg=C["bg"])
@@ -453,7 +647,8 @@ class PumpHMI(tk.Tk):
         fr = tk.Frame(parent, bg=C["input_bg"], padx=4, pady=3)
         fr.grid(row=row, column=col+1, sticky="w", pady=3, padx=4)
         kw = {"validate": "key", "validatecommand": vcmd} if vcmd else {}
-        e = tk.Entry(fr, textvariable=var, font=("Consolas", 13, "bold"),
+        entry_font_size = max(9, round(13 * getattr(self, "_ui_scale", 1.0)))
+        e = tk.Entry(fr, textvariable=var, font=("Consolas", entry_font_size, "bold"),
                      bg=C["input_bg"], fg=C["input_fg"],
                      insertbackground="white", bd=0, width=width, **kw)
         e.pack(side="left")
@@ -494,38 +689,56 @@ class PumpHMI(tk.Tk):
     def _build_tab_dashboard(self):
         tab = self._tab_frame("Dashboard")
 
-        motors = tk.Frame(tab, bg=C["bg"])
-        motors.pack(fill="both", expand=True, padx=4, pady=4)
+        # Status bar packed FIRST so canvas doesn't cover it
+        status = tk.Frame(tab, bg=C["header2"], height=36)
+        status.pack(fill="x", side="bottom")
+        status.pack_propagate(False)
+        tk.Label(status,
+                 text="  VISA PVT LTD  |  Precision Pump Control  |  OEM-STB Series  |  MODBUS RTU RS485",
+                 font=self.f_small, bg=C["header2"], fg="#B3E5FC").pack(side="left", pady=8)
+
+        # Scrollable container — allows content to remain usable on small panels
+        canvas = tk.Canvas(tab, bg=C["bg"], highlightthickness=0)
+        vsb = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        motors = tk.Frame(canvas, bg=C["bg"])
+        canvas_win = canvas.create_window((0, 0), window=motors, anchor="nw")
+
+        def _on_frame_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_win, width=e.width)
+        motors.bind("<Configure>", _on_frame_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
         motors.columnconfigure(0, weight=1)
         motors.columnconfigure(1, weight=1)
         motors.rowconfigure(0, weight=1)
 
         self._motor_panels = []
+        # Store canvas reference for mouse wheel handler
+        self._dashboard_canvas = canvas
         for i in range(2):
             outer, body = self._card(motors, f"PUMP CHANNEL {i+1}  (Slave {i+1})")
             outer.grid(row=0, column=i, sticky="nsew")
             self._build_motor_panel(body, i)
-
-        status = tk.Frame(tab, bg=C["header2"], height=36)
-        status.pack(fill="x", side="bottom")
-        status.pack_propagate(False)
-        tk.Label(status,
-                 text="  OEM-STB Series  |  MODBUS RTU RS485  |  Shenchen Precision Pump",
-                 font=self.f_small, bg=C["header2"], fg="#B3E5FC").pack(side="left", pady=8)
 
     def _build_motor_panel(self, parent, idx):
         top = tk.Frame(parent, bg=C["panel"])
         top.pack(fill="x", pady=(0, 8))
 
         self._status_dot = getattr(self, "_status_dot", [None, None])
-        dot = tk.Label(top, text="●", font=("Segoe UI", 20),
+        dot = tk.Label(top, text="●", font=("Segoe UI", max(16, round(20 * getattr(self, "_ui_scale", 1.0)))),
                        bg=C["panel"], fg=C["red"])
         dot.pack(side="left")
         self._status_dot[idx] = dot
 
         self._status_txt = getattr(self, "_status_txt", [None, None])
         self._status_txt[idx] = tk.Label(top, text="STOPPED",
-                                          font=("Segoe UI", 12, "bold"),
+                                          font=("Segoe UI", max(9, round(12 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                           bg=C["panel"], fg=C["red"])
         self._status_txt[idx].pack(side="left", padx=6)
 
@@ -542,10 +755,10 @@ class PumpHMI(tk.Tk):
                  font=self.f_small, bg=C["input_bg"], fg="#90CAF9").pack()
         # Reuse existing DoubleVar — do NOT recreate it or dispensing tracking breaks
         tk.Label(vol_fr, textvariable=self._disp_volume[idx],
-                 font=("Consolas", 36, "bold"),
+                 font=("Consolas", max(20, round(36 * getattr(self, "_ui_scale", 1.0))), "bold"),
                  bg=C["input_bg"], fg="#64FFDA").pack()
         tk.Label(vol_fr, text="mL",
-                 font=("Segoe UI", 14),
+                 font=("Segoe UI", max(9, round(14 * getattr(self, "_ui_scale", 1.0)))),
                  bg=C["input_bg"], fg="#90CAF9").pack()
 
         rpm_fr = tk.Frame(parent, bg=C["panel"])
@@ -554,7 +767,7 @@ class PumpHMI(tk.Tk):
                  bg=C["panel"], fg=C["text_dim"], width=10, anchor="w").pack(side="left")
         self._rpm_lbl = getattr(self, "_rpm_lbl", [None, None])
         self._rpm_lbl[idx] = tk.Label(rpm_fr, text="0.00 RPM",
-                                       font=("Consolas", 13, "bold"),
+                                       font=("Consolas", max(9, round(13 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                        bg=C["panel"], fg=C["text"])
         self._rpm_lbl[idx].pack(side="left")
 
@@ -598,7 +811,7 @@ class PumpHMI(tk.Tk):
         sl.pack(side="left", fill="x", expand=True)
 
         rpm_entry = tk.Entry(rpm_row, textvariable=self._rpm_var[idx],
-                             font=("Consolas", 11), bg=C["input_bg"],
+                             font=("Consolas", max(8, round(11 * getattr(self, "_ui_scale", 1.0)))), bg=C["input_bg"],
                              fg="white", insertbackground="white",
                              width=7, bd=0,
                              validate="key", validatecommand=self._vcmd_int)
@@ -613,7 +826,7 @@ class PumpHMI(tk.Tk):
         for v in [10, 30, 60, 100, 150, 200, 300]:
             tk.Button(preset_fr, text=str(v),
                       command=lambda val=v, i=idx: self._set_rpm(i, float(val)),
-                      font=("Segoe UI", 9, "bold"), bg=C["accent2"], fg="white",
+                      font=("Segoe UI", max(7, round(9 * getattr(self, "_ui_scale", 1.0))), "bold"), bg=C["accent2"], fg="white",
                       relief="flat", padx=8, pady=4,
                       cursor="hand2").pack(side="left", padx=1)
 
@@ -662,8 +875,24 @@ class PumpHMI(tk.Tk):
     def _build_tab_dispensing(self):
         tab = self._tab_frame("Dispensing")
 
-        top = tk.Frame(tab, bg=C["bg"])
-        top.pack(fill="both", expand=True, padx=4, pady=4)
+        canvas = tk.Canvas(tab, bg=C["bg"], highlightthickness=0)
+        vsb = ttk.Scrollbar(tab, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        top = tk.Frame(canvas, bg=C["bg"])
+        canvas_win = canvas.create_window((0, 0), window=top, anchor="nw")
+
+        def _on_frame_configure(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_win, width=e.width)
+        top.bind("<Configure>", _on_frame_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+        # Store canvas reference for single root-level mouse wheel handler
+        self._dispensing_canvas = canvas
+
         top.columnconfigure(0, weight=1)
         top.columnconfigure(1, weight=1)
 
@@ -682,11 +911,8 @@ class PumpHMI(tk.Tk):
         top_fr = tk.Frame(parent, bg=C["panel"])
         top_fr.pack(fill="x", pady=(0, 6))
 
-        self._disp_mode = getattr(self, "_disp_mode", [None, None])
-        self._disp_mode[idx] = tk.StringVar(value="volume")
-
         tk.Label(top_fr, text="VOLUME DISPENSING",
-                 font=("Segoe UI", 12, "bold"),
+                 font=("Segoe UI", max(8, round(12 * getattr(self, "_ui_scale", 1.0))), "bold"),
                  bg=C["accent"], fg="white",
                  padx=12, pady=6).pack(side="left")
 
@@ -698,7 +924,7 @@ class PumpHMI(tk.Tk):
 
         self._disp_toggle_btn = getattr(self, "_disp_toggle_btn", [None, None])
         toggle_btn = tk.Button(on_off_fr, text="OFF",
-                               font=("Segoe UI", 11, "bold"),
+                               font=("Segoe UI", max(7, round(11 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                bg=C["red"], fg="white",
                                relief="flat", padx=16, pady=6,
                                cursor="hand2")
@@ -726,13 +952,10 @@ class PumpHMI(tk.Tk):
         self._dv_time  = getattr(self, "_dv_time",  [None, None])
         self._dv_pause = getattr(self, "_dv_pause", [None, None])
         self._dv_rep   = getattr(self, "_dv_rep",   [None, None])
-        self._dv_speed = getattr(self, "_dv_speed", [None, None])  # kept for compat
-
         self._dv_vol[idx]   = tk.DoubleVar(value=10.0)
         self._dv_time[idx]  = tk.DoubleVar(value=float(default_time))
         self._dv_pause[idx] = tk.DoubleVar(value=1.0)
         self._dv_rep[idx]   = tk.IntVar(value=1)
-        self._dv_speed[idx] = tk.IntVar(value=60)   # kept for compat, not shown
 
         grid = tk.Frame(parent, bg=C["panel"])
         grid.pack(fill="x", pady=4)
@@ -749,8 +972,9 @@ class PumpHMI(tk.Tk):
                          row=row, column=0, sticky="w", pady=3, padx=(0, 4))
             fr = tk.Frame(grid, bg=C["input_bg"], padx=4, pady=3)
             fr.grid(row=row, column=1, sticky="w", pady=3, padx=4)
+            _ef = max(9, round(13 * getattr(self, "_ui_scale", 1.0)))
             tk.Entry(fr, textvariable=var,
-                     font=("Consolas", 13, "bold"),
+                     font=("Consolas", _ef, "bold"),
                      bg=C["input_bg"], fg=C["input_fg"],
                      insertbackground="white", bd=0, width=w,
                      validate="key", validatecommand=vcmd).pack(side="left")
@@ -772,10 +996,10 @@ class PumpHMI(tk.Tk):
 
         self._disp_rpm_display = getattr(self, "_disp_rpm_display", [None, None])
         self._disp_rpm_display[idx] = tk.Label(rpm_row, text="---",
-                                                font=("Consolas", 32, "bold"),
+                                                font=("Consolas", max(18, round(32 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                                 bg=C["input_bg"], fg="#64FFDA")
         self._disp_rpm_display[idx].pack(side="left")
-        tk.Label(rpm_row, text=" RPM", font=("Segoe UI", 13),
+        tk.Label(rpm_row, text=" RPM", font=("Segoe UI", max(9, round(13 * getattr(self, "_ui_scale", 1.0)))),
                  bg=C["input_bg"], fg="#90CAF9").pack(side="left", pady=4)
 
         self._calc_time_lbl = getattr(self, "_calc_time_lbl", [None, None])
@@ -801,7 +1025,7 @@ class PumpHMI(tk.Tk):
 
         self._disp_counter = getattr(self, "_disp_counter", [None, None])
         self._disp_counter[idx] = tk.Label(parent, text="0 / 0",
-                                            font=("Segoe UI", 12, "bold"),
+                                            font=("Segoe UI", max(8, round(12 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                             bg=C["panel"], fg=C["accent"])
         self._disp_counter[idx].pack(pady=2)
 
@@ -868,7 +1092,7 @@ class PumpHMI(tk.Tk):
             ]:
                 sp = ttk.Spinbox(row, from_=0, to=maxval,
                                  textvariable=var,
-                                 font=("Consolas", 14, "bold"),
+                                 font=("Consolas", max(9, round(14 * getattr(self, "_ui_scale", 1.0))), "bold"),
                                  width=3, justify="center",
                                  wrap=True,
                                  validate="key",
@@ -876,7 +1100,7 @@ class PumpHMI(tk.Tk):
                 sp.pack(side="left", padx=1)
                 _spinboxes.append(sp)
                 if sep:
-                    tk.Label(row, text=sep, font=("Consolas", 14),
+                    tk.Label(row, text=sep, font=("Consolas", max(9, round(14 * getattr(self, "_ui_scale", 1.0)))),
                              bg=C["panel"], fg=C["text"]).pack(side="left", padx=1)
             # Store spinbox list for locking
             setattr(self, key + "_spinboxes", _spinboxes)
@@ -919,7 +1143,7 @@ class PumpHMI(tk.Tk):
                  font=self.f_small, bg=C["panel"],
                  fg=C["text_dim"]).pack(side="left")
         now_lbl = tk.Label(now_row, text="",
-                           font=("Consolas", 12, "bold"),
+                           font=("Consolas", max(8, round(12 * getattr(self, "_ui_scale", 1.0))), "bold"),
                            bg=C["panel"], fg=C["accent"])
         now_lbl.pack(side="left", padx=8)
         def tick():
@@ -1192,8 +1416,9 @@ class PumpHMI(tk.Tk):
         actual_row.pack(fill="x", pady=6)
         af = tk.Frame(actual_row, bg=C["input_bg"], padx=8, pady=6)
         af.pack(side="left")
+        _cef = max(10, round(16 * getattr(self, "_ui_scale", 1.0)))
         tk.Entry(af, textvariable=self._cal_actual[idx],
-                 font=("Consolas", 16, "bold"),
+                 font=("Consolas", _cef, "bold"),
                  bg=C["input_bg"], fg="white",
                  insertbackground="white", bd=0, width=8,
                  validate="key", validatecommand=self._vcmd_float).pack(side="left")
@@ -1365,7 +1590,7 @@ class PumpHMI(tk.Tk):
         tk.Label(hint,
                  text="Select a row and click  APPLY TO DISPENSING  (or double-click) "
                       "to load settings into the pump's Dispensing page, then run from there.",
-                 font=("Segoe UI", 9), bg=C["row_alt"], fg=C["text_dim"],
+                 font=("Segoe UI", max(7, round(9 * getattr(self, "_ui_scale", 1.0)))), bg=C["row_alt"], fg=C["text_dim"],
                  wraplength=800, justify="left").pack(anchor="w")
 
         btn_row = tk.Frame(body, bg=C["panel"])
@@ -1404,11 +1629,18 @@ class PumpHMI(tk.Tk):
     def _add_recipe(self):
         dlg = tk.Toplevel(self)
         dlg.title("Add Program — Common Mode")
-        dlg.geometry("420x480")
+        dlg.geometry("440x620")
         dlg.configure(bg=C["panel"])
         dlg.resizable(False, False)
         dlg.grab_set()
 
+        # Centre on parent
+        dlg.update_idletasks()
+        px = self.winfo_x() + (self.winfo_width()  - 440) // 2
+        py = self.winfo_y() + (self.winfo_height() - 620) // 2
+        dlg.geometry(f"440x620+{max(0,px)}+{max(0,py)}")
+
+        # ── Header ───────────────────────────────────────────────────────
         hdr = tk.Frame(dlg, bg=C["accent"], pady=8)
         hdr.pack(fill="x")
         tk.Label(hdr, text="  ADD PROGRAM", font=self.f_bold,
@@ -1417,46 +1649,42 @@ class PumpHMI(tk.Tk):
         body = tk.Frame(dlg, bg=C["panel"], padx=16, pady=10)
         body.pack(fill="both", expand=True)
 
+        # ── Channel buttons ───────────────────────────────────────────────
         tk.Label(body, text="Select Channel:", font=self.f_bold,
-                 bg=C["panel"], fg=C["text"]).grid(row=0, column=0,
-                 columnspan=4, sticky="w", pady=(0,6))
+                 bg=C["panel"], fg=C["text"]).pack(anchor="w", pady=(0,6))
 
         ch_var = tk.IntVar(value=1)
+        ch_row = tk.Frame(body, bg=C["panel"])
+        ch_row.pack(anchor="w", pady=(0,8))
+
         def on_channel_change():
             ch = ch_var.get()
-            rpm_val = int(self._rpm_var[ch-1].get()) if self._rpm_var[ch-1] else 60
-            vol_val = self._dv_vol[ch-1].get() if self._dv_vol[ch-1] else 10.0
-            pause_v = self._dv_pause[ch-1].get() if self._dv_pause[ch-1] else 1.0
-            rep_v   = self._dv_rep[ch-1].get() if self._dv_rep[ch-1] else 1
-            sb_v    = self._suckback_var[ch-1].get()
-            tube_v  = self._tube_var[ch-1].get()
             try:
-                fields["speed"].set(str(rpm_val))
-                fields["vol"].set(str(vol_val))
-                fields["pause"].set(str(pause_v))
-                fields["repeat"].set(str(int(rep_v)))
-                fields["suckback"].set(str(sb_v))
-                fields["tube"].set(tube_v)
+                fields["speed"].set(str(int(self._rpm_var[ch-1].get()) if self._rpm_var[ch-1] else 60))
+                fields["vol"].set(str(self._dv_vol[ch-1].get() if self._dv_vol[ch-1] else 10.0))
+                fields["pause"].set(str(self._dv_pause[ch-1].get() if self._dv_pause[ch-1] else 1.0))
+                fields["repeat"].set(str(int(self._dv_rep[ch-1].get() if self._dv_rep[ch-1] else 1)))
+                fields["suckback"].set(str(self._suckback_var[ch-1].get()))
+                fields["tube"].set(self._tube_var[ch-1].get())
             except Exception:
                 pass
+            update_calc()
 
-        for ch, col in [(1, 1), (2, 3)]:
-            rb = tk.Radiobutton(body, text=f"  PUMP {ch}  ",
-                                variable=ch_var, value=ch,
-                                font=("Segoe UI", 12, "bold"),
-                                bg=C["accent"], fg="white",
-                                selectcolor=C["green"],
-                                activebackground=C["accent"],
-                                relief="flat", padx=16, pady=8,
-                                indicatoron=False,
-                                command=on_channel_change)
-            rb.grid(row=0, column=col, padx=6, pady=4)
+        for ch in [1, 2]:
+            tk.Radiobutton(ch_row, text=f"  PUMP {ch}  ",
+                           variable=ch_var, value=ch,
+                           font=self.f_btn,
+                           bg=C["accent"], fg="white",
+                           selectcolor=C["green"],
+                           activebackground=C["accent"],
+                           relief="flat", padx=16, pady=8,
+                           indicatoron=False,
+                           command=on_channel_change).pack(side="left", padx=(0,8))
 
-        sep = tk.Frame(body, bg=C["border"], height=1)
-        sep.grid(row=1, column=0, columnspan=4, sticky="ew", pady=8)
+        tk.Frame(body, bg=C["border"], height=1).pack(fill="x", pady=(0,8))
 
+        # ── Input fields ──────────────────────────────────────────────────
         try:
-            _ch   = ch_var.get() - 1
             _rpm  = int(self._rpm_var[0].get())  if self._rpm_var[0]  else 60
             _vol  = self._dv_vol[0].get()         if self._dv_vol[0]  else 10.0
             _paus = self._dv_pause[0].get()       if self._dv_pause[0] else 1.0
@@ -1464,93 +1692,111 @@ class PumpHMI(tk.Tk):
             _sb   = self._suckback_var[0].get()
             _tube = self._tube_var[0].get()
         except Exception:
-            _rpm,_vol,_paus,_rep,_sb,_tube = 60,10.0,1.0,1,0.0,"2x1mm"
+            _rpm, _vol, _paus, _rep, _sb, _tube = 60, 10.0, 1.0, 1, 0.0, "2x1mm"
 
         fields = {}
-        rows = [
-            ("tube",    "Tube Size:",       _tube),
-            ("vol",     "Disp. Vol. (mL):", str(_vol)),
-            ("time",    "Disp. Time (s):",  "2.0"),
-            ("pause",   "Pause Time (s):",  str(_paus)),
-            ("repeat",  "Repeat:",          str(_rep)),
-            ("speed",   "Speed (RPM):",     str(_rpm)),
-            ("suckback","Suck-Back (deg):", str(_sb)),
+        field_defs = [
+            ("tube",    "Tube Size:",       _tube,       None),
+            ("vol",     "Disp. Vol. (mL):", str(_vol),   self._vcmd_float),
+            ("time",    "Disp. Time (s):",  "2.0",       self._vcmd_float),
+            ("pause",   "Pause Time (s):",  str(_paus),  self._vcmd_float),
+            ("repeat",  "Repeat:",          str(_rep),   self._vcmd_int),
+            ("speed",   "Speed (RPM):",     str(_rpm),   self._vcmd_int),
+            ("suckback","Suck-Back (deg):", str(_sb),    self._vcmd_float),
         ]
 
-        for i, (k, lbl, default) in enumerate(rows):
-            tk.Label(body, text=lbl, font=self.f_label,
+        grid = tk.Frame(body, bg=C["panel"])
+        grid.pack(fill="x")
+        grid.columnconfigure(1, weight=1)
+
+        ef = max(9, round(12 * getattr(self, "_ui_scale", 1.0)))
+
+        for i, (k, lbl, default, vcmd) in enumerate(field_defs):
+            tk.Label(grid, text=lbl, font=self.f_label,
                      bg=C["panel"], fg=C["text_dim"],
-                     width=18, anchor="w").grid(
-                         row=i+2, column=0, columnspan=2,
-                         sticky="w", pady=4, padx=(0,8))
+                     anchor="w").grid(row=i, column=0, sticky="w",
+                                      pady=4, padx=(0,10))
             var = tk.StringVar(value=default)
             fields[k] = var
 
             if k == "tube":
-                cb = ttk.Combobox(body, textvariable=var,
+                cb = ttk.Combobox(grid, textvariable=var,
                                   values=list(TUBE_DATA.keys()),
                                   width=14, state="readonly")
-                cb.grid(row=i+2, column=2, columnspan=2,
-                        sticky="w", pady=4)
+                cb.grid(row=i, column=1, sticky="w", pady=4)
+                cb.bind("<<ComboboxSelected>>", lambda e: update_calc())
             else:
-                # repeat = integer; all others = positive float
-                _vcmd = self._vcmd_int if k == "repeat" else self._vcmd_float
-                ebox = tk.Frame(body, bg=C["input_bg"], padx=4, pady=3)
-                ebox.grid(row=i+2, column=2, columnspan=2,
-                          sticky="w", pady=4)
-                tk.Entry(ebox, textvariable=var,
-                         font=("Consolas", 12, "bold"),
+                kw = {"validate": "key", "validatecommand": vcmd} if vcmd else {}
+                fr = tk.Frame(grid, bg=C["input_bg"], padx=6, pady=3)
+                fr.grid(row=i, column=1, sticky="ew", pady=4)
+                tk.Entry(fr, textvariable=var,
+                         font=("Consolas", ef, "bold"),
                          bg=C["input_bg"], fg="white",
-                         insertbackground="white", bd=0, width=12,
-                         validate="key", validatecommand=_vcmd).pack()
+                         insertbackground="white", bd=0,
+                         **kw).pack(fill="x")
 
-        info_lbl = tk.Label(body, text="", font=self.f_small,
-                            bg=C["row_alt"], fg=C["accent"],
-                            wraplength=360, justify="left", pady=4)
-        info_lbl.grid(row=len(rows)+2, column=0, columnspan=4,
-                      sticky="ew", pady=4)
+        # ── Calc info line ────────────────────────────────────────────────
+        tk.Frame(body, bg=C["border"], height=1).pack(fill="x", pady=8)
+
+        info_lbl = tk.Label(body, text="Enter Vol and Disp. Time to calculate RPM",
+                            font=self.f_small, bg=C["row_alt"], fg=C["text_dim"],
+                            wraplength=400, justify="left", padx=8, pady=6)
+        info_lbl.pack(fill="x")
 
         def update_calc(*a):
             try:
-                vol   = float(fields["vol"].get())
+                vol   = float(fields["vol"].get()) if fields["vol"].get() else 0
                 t_sec = float(fields["time"].get()) if fields["time"].get() else 0
                 tube  = fields["tube"].get()
-                max_flow = TUBE_DATA[tube]["max_flow"]
+                max_flow = TUBE_DATA.get(tube, TUBE_DATA["2x1mm"])["max_flow"]
                 if t_sec > 0 and vol > 0:
-                    flow_needed = (vol / t_sec) * 60.0
-                    rpm_needed  = (flow_needed / max_flow) * MAX_RPM
+                    rpm_needed = ((vol / t_sec) * 60.0 / max_flow) * MAX_RPM
                     if rpm_needed > MAX_RPM:
                         min_t = (vol / max_flow) * 60.0
                         info_lbl.config(
-                            text=f"⚠ NOT POSSIBLE — min time at 350 RPM = {min_t:.1f} s",
+                            text=f"⚠ NOT POSSIBLE  |  Min time at 350 RPM = {min_t:.1f} s",
                             fg=C["red"], bg=C["row_alt"])
                     elif rpm_needed < 1:
                         info_lbl.config(
-                            text=f"⚠ Time too long — RPM < 1, reduce time",
+                            text="⚠ Time too long — RPM < 1, reduce time",
                             fg=C["orange"], bg=C["row_alt"])
                     else:
-                        flow_actual = calc_flow_rate(tube, rpm_needed)
+                        flow = calc_flow_rate(tube, rpm_needed)
                         info_lbl.config(
-                            text=f"✔ Need {rpm_needed:.1f} RPM  |  Flow: {flow_actual:.3f} mL/min  |  {tube}",
+                            text=f"✔  Need {rpm_needed:.1f} RPM  |  Flow: {flow:.3f} mL/min",
                             fg=C["green"], bg=C["row_alt"])
                 elif vol > 0:
-                    info_lbl.config(text="Enter Disp. Time to calculate RPM", fg=C["text_dim"], bg=C["row_alt"])
-            except: pass
+                    info_lbl.config(
+                        text="Enter Disp. Time to calculate RPM",
+                        fg=C["text_dim"], bg=C["row_alt"])
+            except Exception:
+                pass
 
         for k in ["vol", "time"]:
-            fields[k].trace_add("write", update_calc)
+            fields[k].trace_add("write", lambda *a: update_calc())
+
+        # ── Buttons ───────────────────────────────────────────────────────
+        btn_row = tk.Frame(body, bg=C["panel"])
+        btn_row.pack(fill="x", pady=(12, 0))
 
         def save():
             try:
+                vol_s = fields["vol"].get()
+                tim_s = fields["time"].get()
+                spd_s = fields["speed"].get()
+                if not vol_s or not tim_s or not spd_s:
+                    messagebox.showwarning("Missing Fields",
+                        "Please fill in Vol, Time and Speed.", parent=dlg)
+                    return
                 rec = {
                     "channel":  ch_var.get(),
                     "tube":     fields["tube"].get(),
-                    "vol":      float(fields["vol"].get()),
-                    "time":     float(fields["time"].get()) if fields["time"].get() else 0.0,
-                    "pause":    float(fields["pause"].get()),
-                    "repeat":   int(fields["repeat"].get()) if fields["repeat"].get() else 1,
-                    "speed":    float(fields["speed"].get()),
-                    "suckback": float(fields["suckback"].get()) if fields["suckback"].get() else 0.0,
+                    "vol":      float(vol_s),
+                    "time":     float(tim_s),
+                    "pause":    float(fields["pause"].get() or "1.0"),
+                    "repeat":   int(fields["repeat"].get() or "1"),
+                    "speed":    float(spd_s),
+                    "suckback": float(fields["suckback"].get() or "0.0"),
                 }
                 self._recipes.append(rec)
                 self._settings["recipes"] = self._recipes
@@ -1558,12 +1804,12 @@ class PumpHMI(tk.Tk):
                 self._refresh_recipe_tree()
                 dlg.destroy()
             except ValueError as e:
-                messagebox.showerror("Invalid Input", str(e))
+                messagebox.showerror("Invalid Input", str(e), parent=dlg)
 
-        btn_row = tk.Frame(body, bg=C["panel"])
-        btn_row.grid(row=len(rows)+3, column=0, columnspan=4, pady=10)
-        self._big_btn(btn_row, "  SAVE PROGRAM", save, C["green"]).pack(side="left", padx=8)
+        self._big_btn(btn_row, "  SAVE PROGRAM", save, C["green"]).pack(
+            side="left", padx=(0, 8))
         self._big_btn(btn_row, "  CANCEL", dlg.destroy, C["red"]).pack(side="left")
+
 
     def _del_recipe(self):
         sel = self._recipe_tree.selection()
@@ -1671,14 +1917,14 @@ class PumpHMI(tk.Tk):
             grid = tk.Frame(body, bg=C["panel"])
             grid.pack(fill="x")
 
-            col1 = tk.Frame(grid, bg=C["panel"], padx=(0), pady=0)
+            col1 = tk.Frame(grid, bg=C["panel"], pady=4)
             col1.pack(side="left", padx=(0,12))
             tk.Label(col1, text="Pump ID:", font=self.f_label,
                      bg=C["panel"], fg=C["text_dim"]).pack(anchor="w")
             id_fr = tk.Frame(col1, bg=C["border"], padx=10, pady=8)
             id_fr.pack(anchor="w")
             tk.Label(id_fr, textvariable=self._slave_var[i],
-                     font=("Consolas", 18, "bold"),
+                     font=("Consolas", max(14, round(18 * getattr(self, "_ui_scale", 1.0))), "bold"),
                      bg=C["border"], fg=C["text"], width=2,
                      anchor="center").pack()
             tk.Label(col1, text="(fixed)", font=("Segoe UI", 8),
@@ -1694,8 +1940,10 @@ class PumpHMI(tk.Tk):
             cb.pack(anchor="w", pady=2)
             cb.bind("<<ComboboxSelected>>",
                     lambda e, idx=i: self._on_tube_change(idx))
-            self._tube_info_lbl[i] = tk.Label(col2, text="",
-                                               font=("Segoe UI",8),
+            _tube_max = TUBE_DATA.get(self._tube_var[i].get(), {}).get("max_flow", 0)
+            self._tube_info_lbl[i] = tk.Label(col2,
+                                               text=f"Max: {_tube_max:.2f} mL/min @ 350 RPM",
+                                               font=("Segoe UI", 8),
                                                bg=C["panel"], fg=C["accent"])
             self._tube_info_lbl[i].pack(anchor="w")
 
@@ -1709,12 +1957,13 @@ class PumpHMI(tk.Tk):
             sl = tk.Scale(sb_row, from_=0, to=360, orient="horizontal",
                           variable=self._suckback_var[i], resolution=1,
                           bg=C["panel"], fg=C["text"],
-                          troughcolor=C["bg"], highlightthickness=0, length=120)
+                          troughcolor=C["bg"], highlightthickness=0,
+                          length=max(100, round(120 * getattr(self, "_ui_scale", 1.0))))
             sl.pack(side="left")
             vf = tk.Frame(sb_row, bg=C["input_bg"], padx=5, pady=3)
             vf.pack(side="left", padx=4)
             tk.Label(vf, textvariable=self._suckback_var[i],
-                     font=("Consolas",11,"bold"),
+                     font=("Consolas", max(8, round(11 * getattr(self, "_ui_scale", 1.0))), "bold"),
                      bg=C["input_bg"], fg="white", width=4).pack(side="left")
             tk.Label(vf, text="deg", font=self.f_small,
                      bg=C["input_bg"], fg="#90CAF9").pack(side="left")
@@ -1729,11 +1978,23 @@ class PumpHMI(tk.Tk):
             tk.Label(col3, text="Auto runs opposite to motor direction",
                      font=("Segoe UI",8), bg=C["panel"],
                      fg=C["text_dim"]).pack(anchor="w")
-            # Auto-save when suckback changes so setting persists on restart
-            self._suckback_var[i].trace_add("write",
-                lambda *a, ch=i: self._settings.update({
-                    f"suckback{ch+1}": self._suckback_var[ch].get()
-                }) or save_settings(self._settings))
+            # Auto-save suckback: update settings dict immediately (fast),
+            # but debounce the file write 500ms to avoid writing on every slider tick.
+            def _make_sb_trace(ch):
+                def on_sb_change(*a):
+                    try:
+                        self._settings[f"suckback{ch+1}"] = self._suckback_var[ch].get()
+                    except Exception:
+                        pass
+                    # Debounce file write
+                    pending = getattr(self, f"_sb_save_pending_{ch}", None)
+                    if pending:
+                        try: self.after_cancel(pending)
+                        except: pass
+                    job = self.after(500, lambda: save_settings(self._settings))
+                    setattr(self, f"_sb_save_pending_{ch}", job)
+                return on_sb_change
+            self._suckback_var[i].trace_add("write", _make_sb_trace(i))
 
         sep_dir = tk.Frame(body, bg=C["border"], height=1)
         sep_dir.pack(fill="x", pady=6)
@@ -2481,12 +2742,15 @@ class PumpHMI(tk.Tk):
 
             # ── FIX: was missing else — always showed fail message regardless ──
             def show():
-                if result == "OK":
-                    msg = "Port " + port + " opened OK! Now click CONNECT BOTH"
-                    self._test_result.config(text=msg, fg=C["green"])
-                else:
-                    msg = "Port test failed: " + result + ". Try: Unplug/replug USB, check Device Manager."
-                    self._test_result.config(text=msg, fg=C["red"])
+                try:
+                    if result == "OK":
+                        msg = "Port " + port + " opened OK! Now click CONNECT BOTH"
+                        self._test_result.config(text=msg, fg=C["green"])
+                    else:
+                        msg = "Port test failed: " + result + ". Try: Unplug/replug USB, check Device Manager."
+                        self._test_result.config(text=msg, fg=C["red"])
+                except Exception:
+                    pass  # window destroyed before result arrived
             self.after(0, show)
 
         threading.Thread(target=test, daemon=True).start()
@@ -2589,16 +2853,21 @@ class PumpHMI(tk.Tk):
 
     def _apply_global_direction(self, idx):
         d = self._global_direction[idx].get()
+        # Sync dashboard direction radio
         if hasattr(self, "_dir_var") and self._dir_var[idx]:
             self._dir_var[idx].set(d)
+        # Update badge always
+        if hasattr(self, "_dir_lbl") and self._dir_lbl[idx]:
+            self._dir_lbl[idx].config(text=d,
+                bg=C["green"] if d == "CW" else C["orange"])
+        # Block MODBUS if motor is locked — don't reverse mid-dispense/calibration/timing
+        if self._motor_locked_by[idx] in ("dispensing", "calibration", "timing"):
+            return
         pump = self._get_pump(idx)
         if pump and pump.is_connected():
             fwd = (d == "CW")
             threading.Thread(target=lambda f=fwd: pump.set_direction(f),
                              daemon=True).start()
-        if hasattr(self, "_dir_lbl") and self._dir_lbl[idx]:
-            self._dir_lbl[idx].config(text=d,
-                bg=C["green"] if d == "CW" else C["orange"])
 
     def _save_all_settings(self):
         self._settings.update({
@@ -2669,5 +2938,35 @@ if __name__ == "__main__":
     except Exception:
         pass
 
+    # ── Splash screen — runs as its own Tk root, then closes ────────────
+    # We use a temporary Tk root just for the splash. After 2.8s it
+    # destroys itself and we create the real PumpHMI app cleanly.
+    splash_root = tk.Tk()
+    splash_root.withdraw()   # hide bare root
+
+    splash = SplashScreen(splash_root)
+    splash.update()
+
+    def _close_splash():
+        try:
+            splash.close()       # cancel after job first, then destroy
+            splash_root.quit()   # exit splash mainloop
+        except Exception:
+            pass
+
+    splash.after(1500, _close_splash)
+    splash_root.mainloop()   # blocks until _close_splash fires
+
+    # Splash done — destroy everything and start fresh
+    try:
+        splash.destroy()
+    except Exception:
+        pass
+    try:
+        splash_root.destroy()
+    except Exception:
+        pass
+
+    # ── Now create the real app as the ONE and ONLY Tk root ──────────────
     app = PumpHMI()
     app.mainloop()

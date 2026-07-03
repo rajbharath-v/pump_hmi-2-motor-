@@ -11,100 +11,10 @@
       "channel": 1,
       "tube": "4x1mm",
       "vol": 10.0,
-      "time": 23.45,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 60,
-      "suckback": 0.0
-    },
-    {
-      "channel": 2,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 23.45,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 60,
-      "suckback": 360.0
-    },
-    {
-      "channel": 1,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 4.69,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 300,
-      "suckback": 0.0
-    },
-    {
-      "channel": 2,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 46.91,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 30,
-      "suckback": 360.0
-    },
-    {
-      "channel": 1,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 4.69,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 300,
-      "suckback": 0.0
-    },
-    {
-      "channel": 2,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 46.91,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 30,
-      "suckback": 360.0
-    },
-    {
-      "channel": 2,
-      "tube": "4x1mm",
-      "vol": 10.0,
       "time": 2.0,
       "pause": 1.0,
-      "repeat": 10,
-      "speed": 30.0,
-      "suckback": 360.0
-    },
-    {
-      "channel": 1,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 4.69,
-      "pause": 1.0,
       "repeat": 1,
-      "speed": 300,
-      "suckback": 0.0
-    },
-    {
-      "channel": 2,
-      "tube": "4x1mm",
-      "vol": 10.0,
-      "time": 46.91,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 30,
-      "suckback": 360.0
-    },
-    {
-      "channel": 1,
-      "tube": "4x1mm",
-      "vol": 50.0,
-      "time": 100.0,
-      "pause": 1.0,
-      "repeat": 1,
-      "speed": 350.0,
+      "speed": 60.0,
       "suckback": 0.0
     }
   ],
